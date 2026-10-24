@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { RotateCcw, Zap } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { AssignmentConfig, StudentSubmission, ClassGroup, SavedEvaluation, MainView, LeadData, PaywallPlanId, SaaSPlan } from './types';
