@@ -1,0 +1,210 @@
+{
+  "institution": {
+    "id": "inst_mv1nh4np",
+    "name": "Lycée Classique de Cocody",
+    "code": "PRAXIS-4732",
+    "country": "Côte d’Ivoire",
+    "city": "Abidjan",
+    "plan": "school_m",
+    "planName": "Établissement Moyen",
+    "academicYear": "2026-2027",
+    "maxTeachers": 25,
+    "status": "active",
+    "contactEmail": "direction@lycee-classique.ci",
+    "contactPhone": "+2250701020304",
+    "createdAt": "2026-10-10T00:22:39.062Z"
+  },
+  "credits": {
+    "institutionId": "inst_mv1nh4np",
+    "remainingCredits": 15000,
+    "totalAllocatedCredits": 15000,
+    "totalCopiesCorrected": 0,
+    "lastUpdatedAt": "2026-10-10T00:22:39.062Z"
+  },
+  "members": [
+    {
+      "id": "mem_dir_mv1nh4nq",
+      "institutionId": "inst_mv1nh4np",
+      "userId": "user_dir_mv1nh4nq",
+      "fullName": "M. Jean Koné",
+      "email": "direction@lycee-classique.ci",
+      "phoneWhatsapp": "+2250701020304",
+      "role": "institution_admin",
+      "status": "active",
+      "assignedDisciplines": [
+        "Direction"
+      ],
+      "classesCount": 0,
+      "studentsCount": 0,
+      "copiesCorrectedCount": 0,
+      "maxCreditsLimit": null,
+      "joinedAt": "2026-10-10T00:22:39.062Z",
+      "lastActiveAt": "2026-10-10T00:22:39.062Z"
+    },
+    {
+      "id": "mem_mv1nhaek",
+      "userId": "user_mv1nhaek",
+      "fullName": "Mme Sophie Toure",
+      "email": "sophie.toure@lycee-classique.ci",
+      "phoneWhatsapp": "+2250711223344",
+      "role": "teacher",
+      "status": "active",
+      "assignedDisciplines": [
+        "Français"
+      ],
+      "classesCount": 0,
+      "studentsCount": 0,
+      "copiesCorrectedCount": 0,
+      "maxCreditsLimit": null,
+      "invitationEmailSent": true,
+      "invitationEmailSentAt": "2026-10-10T00:22:46.508Z",
+      "joinedAt": "2026-10-10T00:22:46.508Z",
+      "lastActiveAt": "2026-10-10T00:22:46.508Z"
+    }
+  ],
+  "classes": [
+    {
+      "id": "class_inst_mv1lgivn",
+      "institutionId": "inst_mv1lgiun",
+      "name": "4ème B",
+      "level": "4ème",
+      "academicYear": "2026-2027",
+      "isInstitutionClass": true,
+      "studentsCount": 3,
+      "evaluationsCount": 0,
+      "averageGrade": null,
+      "teachers": [
+        {
+          "id": "ct_1791588371603_1",
+          "classId": "class_inst_mv1lgivn",
+          "teacherId": "mem_mv1lgivf",
+          "teacherName": "M. Paul Diallo",
+          "teacherEmail": "prof.diallo_1791588371445@college-avenir.ci",
+          "discipline": "Français",
+          "status": "active",
+          "assignedAt": "2026-10-09T23:26:11.603Z"
+        }
+      ],
+      "students": [
+        {
+          "id": "stu_1791588371603_1",
+          "fullName": "Aka Danielle",
+          "averageGrade": 15,
+          "evaluationsCount": 1,
+          "lastGrade": "15/20"
+        },
+        {
+          "id": "stu_1791588371603_2",
+          "fullName": "Kouassi Yann",
+          "averageGrade": null,
+          "evaluationsCount": 0,
+          "lastGrade": null
+        },
+        {
+          "id": "stu_1791588371603_3",
+          "fullName": "Traoré Seydou",
+          "averageGrade": null,
+          "evaluationsCount": 0,
+          "lastGrade": null
+        }
+      ],
+      "createdAt": "2026-10-09T23:26:11.603Z"
+    }
+  ],
+  "invitations": [
+    {
+      "id": "inv_mv1nhaek",
+      "institutionId": "inst_mv1nh4np",
+      "email": "sophie.toure@lycee-classique.ci",
+      "role": "teacher",
+      "invitedByName": "M. Jean Koné",
+      "status": "accepted",
+      "emailSent": true,
+      "createdAt": "2026-10-10T00:22:46.508Z",
+      "expiresAt": "2026-11-09T00:22:46.508Z"
+    },
+    {
+      "id": "inv_mv1lgivf",
+      "institutionId": "inst_mv1lgiun",
+      "email": "prof.diallo_1791588371445@college-avenir.ci",
+      "role": "teacher",
+      "invitedByName": "M. Mamadou Koné",
+      "status": "accepted",
+      "createdAt": "2026-10-09T23:26:11.595Z",
+      "expiresAt": "2026-11-08T23:26:11.595Z"
+    }
+  ],
+  "submissions": [
+    {
+      "submissionId": "sub_mv1lglyg",
+      "id": "sub_mv1lglyg",
+      "institutionId": "inst_mv1lgiun",
+      "assignmentTitle": "Devoir N°1 : Le récit autobiographique",
+      "discipline": "Français",
+      "className": "4ème B",
+      "classId": "class_inst_mv1lgivn",
+      "teacherName": "M. Paul Diallo",
+      "teacherEmail": "prof.diallo_1791588371445@college-avenir.ci",
+      "teacherId": "mem_mv1lgivf",
+      "studentName": "Aka Danielle",
+      "studentId": "stu_1791588371603_1",
+      "noteFinale": "15/20",
+      "bareme": 20,
+      "appreciationGenerale": "La copie transmise est totalement vierge. Aucun exercice n'a été réalisé, ce qui ne permet pas d'évaluer vos compétences sur le récit autobiographique. Je vous invite à refaire le devoir avec attention.",
+      "pointsForts": [
+        "Soin apporté à la présentation du document"
+      ],
+      "axesAmelioration": [],
+      "exercices": [],
+      "correctedAt": "2026-10-09T23:26:15.592Z"
+    }
+  ],
+  "creditLedger": [
+    {
+      "id": "ledg_mv1nhaek",
+      "date": "2026-10-10T00:22:46.508Z",
+      "teacherName": "Mme Sophie Toure",
+      "delta": 0,
+      "actionType": "member_invited",
+      "submissionTitle": "Invitation envoyée par email à sophie.toure@lycee-classique.ci (Accès au pool global)",
+      "studentName": "—"
+    },
+    {
+      "id": "ledg_mv1nh4nq",
+      "date": "2026-10-10T00:22:39.062Z",
+      "teacherName": "Direction Générale Praxis IA",
+      "delta": 15000,
+      "actionType": "grant",
+      "submissionTitle": "Ouverture de compte établissement pour Lycée Classique de Cocody (15 000 copies)",
+      "studentName": "—"
+    },
+    {
+      "id": "ledg_mv1lglyg",
+      "date": "2026-10-09T23:26:15.592Z",
+      "teacherName": "M. Paul Diallo",
+      "delta": -1,
+      "actionType": "correction_consume",
+      "submissionTitle": "Devoir N°1 : Le récit autobiographique",
+      "studentName": "Aka Danielle"
+    },
+    {
+      "id": "ledg_mv1lgiuo",
+      "date": "2026-10-09T23:26:11.568Z",
+      "teacherName": "M. Mamadou Koné",
+      "delta": 5000,
+      "actionType": "initial_grant",
+      "submissionTitle": "Dotation initiale Établissement (5000 corrections)",
+      "studentName": "—"
+    }
+  ],
+  "accessLog": [
+    {
+      "id": "log_mv1lglyr",
+      "institutionId": "inst_mv1lgiun",
+      "adminEmail": "dir.mamadou_1791588371445@college-avenir.ci",
+      "submissionId": "sub_mv1lglyg",
+      "endpoint": "/api/institution/submissions/sub_mv1lglyg/inspect",
+      "timestamp": "2026-10-09T23:26:15.603Z"
+    }
+  ]
+}
