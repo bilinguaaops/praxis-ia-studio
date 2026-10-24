@@ -171,9 +171,13 @@ export function useSupabaseAuth() {
         school: profile?.school_name || (user.user_metadata?.school_name as string) || 'Établissement non précisé',
         plan: (subscription?.plan_id as SaaSPlan) || 'free',
         status: (subscription?.status as any) || 'active',
-        subscriptionCredits: (balance?.subscription_credits ?? 0) + Math.max(30 - (balance?.total_copies_corrected ?? 0), balance?.free_credits ?? 30),
+        subscriptionCredits: (subscription?.plan_id && subscription.plan_id !== 'free' && subscription.plan_id !== 'trial')
+          ? (balance?.subscription_credits ?? 0)
+          : Math.max(0, 15 - (balance?.total_copies_corrected ?? 0)),
         extraCredits: balance?.purchased_credits ?? 0,
-        quota: Math.max(30, balance?.total_available_credits ?? 30),
+        quota: (subscription?.plan_id && subscription.plan_id !== 'free' && subscription.plan_id !== 'trial')
+          ? (balance?.total_available_credits ?? 15)
+          : 15,
         copiesCorrected: balance?.total_copies_corrected ?? 0,
         userId: user.id,
         role: profile?.role || 'teacher',

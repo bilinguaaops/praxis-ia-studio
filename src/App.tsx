@@ -128,10 +128,10 @@ export default function App() {
           localStorage.removeItem('praxis_lead');
           localStorage.removeItem('cpro_lead');
           setLocalLead(null);
-        } else if (parsed && (!parsed.plan || parsed.plan === 'trial' || parsed.plan === 'free') && ((parsed.subscriptionCredits ?? 0) > 30 || (parsed.quota ?? 0) > 30)) {
+        } else if (parsed && (!parsed.plan || parsed.plan === 'trial' || parsed.plan === 'free') && ((parsed.subscriptionCredits ?? 0) > 15 || (parsed.quota ?? 0) > 15)) {
           const used = parsed.copiesCorrected || 0;
-          parsed.quota = 30;
-          parsed.subscriptionCredits = Math.max(0, 30 - used);
+          parsed.quota = 15;
+          parsed.subscriptionCredits = Math.max(0, 15 - used);
           localStorage.setItem('praxis_lead', JSON.stringify(parsed));
           localStorage.setItem('cpro_lead', JSON.stringify(parsed));
           setLocalLead({ ...parsed });
@@ -153,7 +153,22 @@ export default function App() {
   }, []);
 
   // Effective authenticated lead (Supabase Auth prend la priorité absolue, puis profil local persistant)
-  const currentLead: LeadData | null = supabaseLead || localLead;
+  // Normalisation stricte : tous les comptes d'essai disposent de 15 copies gratuites
+  const rawLead: LeadData | null = supabaseLead || localLead;
+  const currentLead: LeadData | null = useMemo(() => {
+    if (!rawLead) return null;
+    const isPaid = rawLead.plan && rawLead.plan !== 'free' && rawLead.plan !== 'trial';
+    if (!isPaid) {
+      const used = rawLead.copiesCorrected || 0;
+      const trialCap = 15;
+      return {
+        ...rawLead,
+        quota: trialCap,
+        subscriptionCredits: Math.max(0, trialCap - used),
+      };
+    }
+    return rawLead;
+  }, [rawLead]);
 
   // Paystack Return / Callback Handler
   const [paystackNotice, setPaystackNotice] = useState<string | null>(null);
@@ -950,8 +965,8 @@ export default function App() {
         email: 'professeur@praxis.edu',
         whatsapp: '',
         plan: 'trial',
-        quota: 30,
-        subscriptionCredits: 30,
+        quota: 15,
+        subscriptionCredits: 15,
         extraCredits: 0,
         copiesCorrected: 0,
         status: 'active',
@@ -1054,9 +1069,9 @@ export default function App() {
                 school: authProfile?.school_name || authUser?.school || (authUser?.user_metadata?.school_name as string) || 'Établissement non précisé',
                 plan: (authProfile?.plan_id as SaaSPlan) || authUser?.plan || 'trial',
                 status: 'active',
-                subscriptionCredits: authUser?.subscriptionCredits ?? 30,
+                subscriptionCredits: authUser?.subscriptionCredits ?? 15,
                 extraCredits: authUser?.extraCredits ?? 0,
-                quota: authUser?.quota ?? 30,
+                quota: authUser?.quota ?? 15,
                 copiesCorrected: authUser?.copiesCorrected ?? 0,
                 userId: authUser?.id || authUser?.userId,
                 role: 'teacher',

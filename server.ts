@@ -381,11 +381,11 @@ function loadLeads(): LeadRecord[] {
       if (Array.isArray(parsed)) {
         let changed = false;
         parsed.forEach((l) => {
-          // Normalisation obligatoire : tous les comptes d'essai disposent de 25 crédits offerts
-          if ((!l.plan || l.plan === 'trial' || l.plan === 'free') && ((l.quota && l.quota < 25) || (l.subscriptionCredits && l.subscriptionCredits < 25 && (l.copiesCorrected || 0) === 0))) {
+          // Normalisation obligatoire : tous les comptes d'essai disposent de 15 crédits offerts
+          if ((!l.plan || l.plan === 'trial' || l.plan === 'free') && ((l.quota && l.quota !== 15) || (l.subscriptionCredits && l.subscriptionCredits !== 15 && (l.copiesCorrected || 0) === 0))) {
             const used = l.copiesCorrected || 0;
-            l.quota = 25;
-            l.subscriptionCredits = Math.max(0, 25 - used);
+            l.quota = 15;
+            l.subscriptionCredits = Math.max(0, 15 - used);
             changed = true;
           }
         });
