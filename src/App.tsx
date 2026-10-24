@@ -90,6 +90,7 @@ export default function App() {
     loading: authLoading,
     signOut,
     refreshProfile,
+    recordCopiesCorrected,
   } = useSupabaseAuth();
 
   // Local state for authenticated teacher (persisted across sessions)
@@ -152,23 +153,45 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  // Effective authenticated lead (Supabase Auth prend la priorité absolue, puis profil local persistant)
-  // Normalisation stricte : tous les comptes d'essai disposent de 15 copies gratuites
-  const rawLead: LeadData | null = supabaseLead || localLead;
+  // Effective authenticated lead : fusion robuste entre Supabase, profil local et historique
+  // Garantit que le décompte des 15 copies gratuites diminue immédiatement à chaque copie corrigée
   const currentLead: LeadData | null = useMemo(() => {
-    if (!rawLead) return null;
-    const isPaid = rawLead.plan && rawLead.plan !== 'free' && rawLead.plan !== 'trial';
-    if (!isPaid) {
-      const used = rawLead.copiesCorrected || 0;
-      const trialCap = 15;
-      return {
-        ...rawLead,
-        quota: trialCap,
-        subscriptionCredits: Math.max(0, trialCap - used),
-      };
-    }
-    return rawLead;
-  }, [rawLead]);
+    if (!supabaseLead && !localLead) return null;
+    const base = supabaseLead || localLead!;
+
+    const localCopies = localLead?.copiesCorrected || 0;
+    const supabaseCopies = supabaseLead?.copiesCorrected || 0;
+
+    let storageHistoryCopies = 0;
+    try {
+      const savedEvs = localStorage.getItem('cpro_evaluations');
+      if (savedEvs) {
+        const parsedEvs = JSON.parse(savedEvs);
+        if (Array.isArray(parsedEvs)) {
+          storageHistoryCopies = parsedEvs.reduce((sum: number, ev: any) => sum + (ev.submissions?.length || 0), 0);
+        }
+      }
+    } catch {}
+
+    const effectiveUsed = Math.max(localCopies, supabaseCopies, storageHistoryCopies);
+
+    const isPaid = base.plan && base.plan !== 'free' && base.plan !== 'trial';
+    const trialCap = 15;
+    const quota = isPaid ? (base.quota || 15) : trialCap;
+    const remainingTrial = Math.max(0, trialCap - effectiveUsed);
+
+    const subCredits = isPaid
+      ? Math.max(0, (base.subscriptionCredits || 0) - Math.max(0, effectiveUsed - (supabaseLead?.copiesCorrected || 0)))
+      : remainingTrial;
+
+    return {
+      ...base,
+      copiesCorrected: effectiveUsed,
+      quota,
+      subscriptionCredits: subCredits,
+      extraCredits: localLead?.extraCredits ?? base.extraCredits ?? 0,
+    };
+  }, [supabaseLead, localLead]);
 
   // Paystack Return / Callback Handler
   const [paystackNotice, setPaystackNotice] = useState<string | null>(null);
@@ -1186,8 +1209,18 @@ export default function App() {
                       onRequireRegistration={() => setIsLeadGateOpen(true)}
                       onOpenPaywall={() => handleOpenPaywall('quarterly')}
                       onLeadChange={(updatedLead) => {
-                        setLocalLead(updatedLead);
-                        refreshProfile();
+                        setLocalLead((prev) => ({
+                          ...(prev || {}),
+                          ...updatedLead,
+                          copiesCorrected: Math.max(prev?.copiesCorrected || 0, updatedLead.copiesCorrected || 0),
+                        }));
+                        try {
+                          localStorage.setItem('praxis_lead', JSON.stringify(updatedLead));
+                          localStorage.setItem('cpro_lead', JSON.stringify(updatedLead));
+                        } catch {}
+                        if (recordCopiesCorrected && updatedLead.copiesCorrected) {
+                          recordCopiesCorrected(updatedLead.copiesCorrected);
+                        }
                       }}
                     />
                   )}

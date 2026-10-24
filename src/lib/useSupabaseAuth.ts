@@ -162,6 +162,29 @@ export function useSupabaseAuth() {
     }
   }, [user?.id, fetchUserData]);
 
+  // Enregistrer le nombre de copies corrigées et mettre à jour le solde
+  const recordCopiesCorrected = useCallback(async (newCount: number) => {
+    if (!user?.id || !isSupabaseConfigured) return;
+    try {
+      const remainingCredits = Math.max(0, 15 - newCount);
+      await supabase
+        .from('user_credit_balances')
+        .update({
+          total_copies_corrected: newCount,
+          total_available_credits: remainingCredits,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('user_id', user.id);
+      setBalance((prev) => prev ? {
+        ...prev,
+        total_copies_corrected: newCount,
+        total_available_credits: remainingCredits,
+      } : prev);
+    } catch (err) {
+      console.warn('Could not update Supabase balance:', err);
+    }
+  }, [user?.id]);
+
   // Mapper le profil et le solde vers le type LeadData utilisé par Praxis
   const currentLead: LeadData | null = user
     ? {
@@ -195,5 +218,6 @@ export function useSupabaseAuth() {
     loading,
     signOut,
     refreshProfile,
+    recordCopiesCorrected,
   };
 }
