@@ -205,6 +205,9 @@ export const AdminAffiliatesView: React.FC<AdminAffiliatesViewProps> = ({ onNoti
     startDate: new Date().toISOString().slice(0, 10),
   });
   const [addLoading, setAddLoading] = useState(false);
+  const [createdAffiliateSuccess, setCreatedAffiliateSuccess] = useState<any | null>(null);
+  const [copiedInvite, setCopiedInvite] = useState<boolean>(false);
+  const [copiedCodeSuccess, setCopiedCodeSuccess] = useState<boolean>(false);
 
   // Formulaire de versement commission
   const [payForm, setPayForm] = useState({
@@ -514,8 +517,11 @@ export const AdminAffiliatesView: React.FC<AdminAffiliatesViewProps> = ({ onNoti
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data.error || 'Erreur création affilié');
 
-      showToast(`✓ Affilié ${newForm.name} créé avec le code ${data.affiliate?.code}`, 'success');
+      setCreatedAffiliateSuccess(data);
+      setCopiedInvite(false);
+      setCopiedCodeSuccess(false);
       setIsAddModalOpen(false);
+      showToast(`✓ Partenaire ${data.affiliate?.name || newForm.name} activé avec succès !`, 'success');
       setNewForm({
         name: '',
         email: '',
@@ -2409,6 +2415,156 @@ export const AdminAffiliatesView: React.FC<AdminAffiliatesViewProps> = ({ onNoti
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ===================================================================== */}
+      {/* 6-BIS. MODAL DE CONFIRMATION ET ACTIVATION DE L'AFFILIÉ (BUG 1 FIX) */}
+      {/* ===================================================================== */}
+      {createdAffiliateSuccess && (
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-[#141C2E] border border-blue-500/40 rounded-2xl w-full max-w-xl p-6 shadow-2xl space-y-5 animate-in fade-in zoom-in-95">
+            {/* Header */}
+            <div className="flex items-start justify-between pb-3 border-b border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+                  <CheckCircle2 className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white flex items-center gap-2">
+                    Partenaire Affilié Activé avec Succès !
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Son compte et son code promo officiel sont immédiatement opérationnels.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCreatedAffiliateSuccess(null)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Fiche récapitulative */}
+            <div className="grid grid-cols-2 gap-3 bg-[#0B0F17] p-3.5 rounded-xl border border-slate-800/80 text-xs">
+              <div>
+                <span className="text-[11px] text-slate-400 block font-medium">Partenaire</span>
+                <span className="text-sm font-bold text-white block mt-0.5">
+                  {createdAffiliateSuccess.affiliate?.name || 'Partenaire'}
+                </span>
+                <span className="text-[11px] text-slate-400 block mt-0.5">
+                  {createdAffiliateSuccess.affiliate?.email}
+                </span>
+                {createdAffiliateSuccess.affiliate?.phone && (
+                  <span className="text-[11px] text-slate-400 block">
+                    📞 {createdAffiliateSuccess.affiliate.phone}
+                  </span>
+                )}
+              </div>
+
+              <div>
+                <span className="text-[11px] text-slate-400 block font-medium">Rémunération & Avantage</span>
+                <span className="text-sm font-bold text-emerald-400 block mt-0.5">
+                  {createdAffiliateSuccess.rate || createdAffiliateSuccess.affiliate?.commissionRate || 20}% de commission
+                </span>
+                <span className="text-[11px] text-blue-300 block mt-0.5">
+                  🎁 -10% de réduction pour ses filleuls
+                </span>
+                <span className="text-[11px] text-slate-400 block">
+                  +100 à 1 000 crédits bonus offerts
+                </span>
+              </div>
+            </div>
+
+            {/* Code Promo officiel */}
+            <div className="p-3 bg-gradient-to-r from-blue-950/40 via-indigo-950/30 to-purple-950/40 rounded-xl border border-blue-800/40 flex items-center justify-between">
+              <div>
+                <span className="text-[11px] text-blue-300 font-medium block">Code Promo Officiel (Testé et Reconnu) :</span>
+                <span className="text-xl font-extrabold text-white font-mono tracking-wider">
+                  {createdAffiliateSuccess.code || createdAffiliateSuccess.affiliate?.code}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const code = createdAffiliateSuccess.code || createdAffiliateSuccess.affiliate?.code;
+                  navigator.clipboard.writeText(code);
+                  setCopiedCodeSuccess(true);
+                  setTimeout(() => setCopiedCodeSuccess(false), 2500);
+                }}
+                className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+              >
+                {copiedCodeSuccess ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                {copiedCodeSuccess ? 'Copié !' : 'Copier code'}
+              </button>
+            </div>
+
+            {/* Badge d'autorisation automatique */}
+            <div className="p-3 rounded-xl bg-emerald-950/30 border border-emerald-800/40 text-[11px] text-emerald-300 flex items-start gap-2.5">
+              <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+              <div>
+                <strong className="text-white block font-semibold mb-0.5">
+                  Déblocage automatique de l'Espace Ambassadeur :
+                </strong>
+                L'email <code className="text-emerald-200 font-mono">{createdAffiliateSuccess.affiliate?.email}</code> est immédiatement enregistré et autorisé. Dès que cette personne se connecte sur l'application avec cette adresse email, elle accède directement à son tableau de bord Ambassadeur (suivi des commissions, retraits Wave/OM, audit des filleuls).
+              </div>
+            </div>
+
+            {/* Message d'invitation prêt à partager */}
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-xs text-slate-300 font-semibold flex items-center gap-1.5">
+                  <Share2 className="w-3.5 h-3.5 text-blue-400" />
+                  Message d'invitation prêt à l'emploi (WhatsApp / Email) :
+                </span>
+              </div>
+              <div className="p-3 bg-[#0B0F17] rounded-xl border border-slate-800 text-[11px] text-slate-300 font-mono leading-relaxed select-all">
+                Bonjour {createdAffiliateSuccess.affiliate?.name || ''}, votre compte Partenaire Ambassadeur PRAXIS a été activé avec succès ! Votre code promo exclusif est {createdAffiliateSuccess.code || createdAffiliateSuccess.affiliate?.code} (offre -10% et crédits bonus à vos enseignants, avec {createdAffiliateSuccess.rate || 20}% de commission pour vous). Connectez-vous sur PRAXIS avec votre adresse {createdAffiliateSuccess.affiliate?.email} pour suivre vos commissions en direct : {createdAffiliateSuccess.inviteUrl || `https://praxis-pro.pro/#affiliate?code=${createdAffiliateSuccess.code}`}
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex flex-wrap items-center justify-end gap-2 pt-2 border-t border-slate-800">
+              {createdAffiliateSuccess.affiliate?.phone && (
+                <a
+                  href={`https://wa.me/${createdAffiliateSuccess.affiliate.phone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(
+                    `Bonjour ${createdAffiliateSuccess.affiliate?.name || ''}, votre compte Partenaire Ambassadeur PRAXIS est actif ! Votre code promo exclusif est ${createdAffiliateSuccess.code || createdAffiliateSuccess.affiliate?.code} (-10% pour vos filleuls, ${createdAffiliateSuccess.rate || 20}% de commission pour vous). Accédez à votre Espace Ambassadeur : ${createdAffiliateSuccess.inviteUrl || `https://praxis-pro.pro/#affiliate?code=${createdAffiliateSuccess.code}`}`
+                  )}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  Envoyer sur WhatsApp
+                </a>
+              )}
+
+              <button
+                type="button"
+                onClick={() => {
+                  const text = `Bonjour ${createdAffiliateSuccess.affiliate?.name || ''}, votre compte Partenaire Ambassadeur PRAXIS a été activé avec succès ! Votre code promo exclusif est ${createdAffiliateSuccess.code || createdAffiliateSuccess.affiliate?.code} (offre -10% et crédits bonus à vos enseignants, avec ${createdAffiliateSuccess.rate || 20}% de commission pour vous). Connectez-vous sur PRAXIS avec votre adresse ${createdAffiliateSuccess.affiliate?.email} pour suivre vos commissions en direct : ${createdAffiliateSuccess.inviteUrl || `https://praxis-pro.pro/#affiliate?code=${createdAffiliateSuccess.code}`}`;
+                  navigator.clipboard.writeText(text);
+                  setCopiedInvite(true);
+                  setTimeout(() => setCopiedInvite(false), 2500);
+                }}
+                className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+              >
+                {copiedInvite ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5 text-blue-400" />}
+                {copiedInvite ? 'Message Copié !' : 'Copier l’invitation'}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setCreatedAffiliateSuccess(null)}
+                className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition-colors cursor-pointer"
+              >
+                Terminé
+              </button>
+            </div>
           </div>
         </div>
       )}

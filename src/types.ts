@@ -190,8 +190,10 @@ export interface LeadData {
   usedPromoCodes?: string[];
   referredByPartner?: string;
   userId?: string;
-  role?: 'teacher' | 'admin' | 'partner';
+  role?: 'teacher' | 'admin' | 'partner' | 'affiliate' | 'ambassadeur';
   referralCode?: string;
+  affiliateCode?: string;
+  isAffiliate?: boolean;
 }
 
 export interface ReferralItem {

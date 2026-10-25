@@ -268,6 +268,32 @@ export default function App() {
     }
   }, []);
 
+  // Détection automatique du statut d'affilié / ambassadeur dès la connexion
+  useEffect(() => {
+    if (currentLead?.email && currentLead.email !== 'professeur@praxis.edu') {
+      fetch(`/api/affiliate?email=${encodeURIComponent(currentLead.email.toLowerCase())}`)
+        .then((r) => r.json())
+        .then((data) => {
+          if (data && data.success && data.affiliate) {
+            const affCode = data.affiliate.code || data.affiliate.affiliateCode;
+            try {
+              localStorage.setItem('praxis_affiliate_code', affCode);
+              sessionStorage.setItem('praxis_affiliate_authorized', 'true');
+            } catch {}
+            if (currentLead.role !== 'affiliate' || !currentLead.affiliateCode) {
+              setLocalLead((prev) => ({
+                ...(prev || currentLead),
+                role: 'affiliate',
+                affiliateCode: affCode,
+                isAffiliate: true,
+              }));
+            }
+          }
+        })
+        .catch(() => {});
+    }
+  }, [currentLead?.email]);
+
   const PATH_MAP: Record<MainView, string> = {
     landing: '/',
     login: '/login',
@@ -1097,7 +1123,9 @@ export default function App() {
                 quota: authUser?.quota ?? 15,
                 copiesCorrected: authUser?.copiesCorrected ?? 0,
                 userId: authUser?.id || authUser?.userId,
-                role: 'teacher',
+                role: authProfile?.role || authUser?.role || (authUser?.isAffiliate ? 'affiliate' : 'teacher'),
+                affiliateCode: authProfile?.affiliateCode || authUser?.affiliateCode || '',
+                isAffiliate: Boolean(authProfile?.isAffiliate || authUser?.isAffiliate),
               };
               setLocalLead(lead);
               localStorage.setItem('praxis_lead', JSON.stringify(lead));
@@ -1345,6 +1373,7 @@ export default function App() {
               {activeView === 'affiliate' && (
                 <AffiliateDashboard
                   onNavigate={handleViewChange}
+                  affiliateCodeProp={currentLead?.affiliateCode}
                   currentUserEmail={currentLead?.email}
                   currentUserRole={currentLead?.role}
                 />

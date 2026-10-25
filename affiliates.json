@@ -1,7 +1,15 @@
 {
   "affiliates": [],
   "payoutRequests": [],
-  "actionLogs": [],
+  "actionLogs": [
+    {
+      "id": "log_mvnvj8bg",
+      "date": "2026-10-25T13:39:09.916Z",
+      "action": "Création affilié",
+      "affiliateName": "Jean Dupont",
+      "details": "Création du compte affilié pour Jean Dupont (Code: DUPONT2026, Taux: 20%). Compte utilisateur et code promo activés."
+    }
+  ],
   "applications": [],
   "authorizedEmails": [],
   "inviteLinks": []

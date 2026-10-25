@@ -311,8 +311,14 @@ export const AffiliateDashboard: React.FC<AffiliateDashboardProps> = ({
       return;
     }
 
-    // 3. Si l'utilisateur connecté est un partenaire ou administrateur
-    if (currentUserEmail && (currentUserRole === 'partner' || currentUserRole === 'admin')) {
+    // 3. Si l'utilisateur connecté est un partenaire, affilié ou administrateur
+    if (currentUserEmail && (currentUserRole === 'partner' || currentUserRole === 'affiliate' || currentUserRole === 'ambassadeur' || currentUserRole === 'admin' || Boolean(affiliateCodeProp))) {
+      handleVerifyAccess(affiliateCodeProp || currentUserEmail);
+      return;
+    }
+
+    // Si l'utilisateur connecté tente d'accéder à l'espace ambassadeur avec son adresse email
+    if (currentUserEmail && currentUserEmail !== 'professeur@praxis.edu') {
       handleVerifyAccess(currentUserEmail);
       return;
     }

@@ -67,6 +67,9 @@ export interface LeadRecord {
   country?: string;
   plan: 'free' | 'trial' | 'monthly' | 'quarterly' | 'school_year' | 'annual' | 'institution' | 'pack';
   status: 'active' | 'trial' | 'paused' | 'inactive' | 'canceled';
+  role?: 'teacher' | 'admin' | 'partner' | 'affiliate' | 'ambassadeur' | string;
+  affiliateCode?: string;
+  isAffiliate?: boolean;
   notes?: string;
   createdAt: string;
   lastActiveAt?: string;
@@ -88,6 +91,7 @@ export interface PromoCodeConfig {
   discountPercent: number;
   firstMonthOnly: boolean;
   bonusCredits?: {
+    starter?: number;
     monthly?: number;
     quarterly?: number;
     school_year?: number;
@@ -217,6 +221,55 @@ export function findPromoCode(inputCode: string | undefined | null): PromoCodeCo
   if (PROMO_CODES_REGISTRY[normalized]) return PROMO_CODES_REGISTRY[normalized];
   const stripped = normalized.replace(/['\s-]/g, '');
   if (PROMO_CODES_REGISTRY[stripped]) return PROMO_CODES_REGISTRY[stripped];
+
+  // Recherche dynamique dans les partenaires & affiliés créés (affiliates.json)
+  try {
+    const affFilePath = path.join(process.cwd(), 'affiliates.json');
+    if (fs.existsSync(affFilePath)) {
+      const rawData = fs.readFileSync(affFilePath, 'utf-8');
+      const parsed = JSON.parse(rawData);
+      if (parsed && Array.isArray(parsed.affiliates)) {
+        const match = parsed.affiliates.find((a: any) => {
+          const aCode = (a.code || a.affiliateCode || '').trim().toUpperCase();
+          const aCodeNorm = aCode.replace(/[’‘`´]/g, "'");
+          const aCodeStrip = aCodeNorm.replace(/['\s-]/g, '');
+          const token = (a.inviteToken || '').trim().toUpperCase();
+          return (
+            aCode === raw ||
+            aCodeNorm === normalized ||
+            aCodeStrip === stripped ||
+            (token && token === raw)
+          );
+        });
+
+        if (match && match.status !== 'Inactif' && match.status !== 'Suspendu' && match.status !== 'Résilié') {
+          const discount = Number(match.discountPercent) || 10;
+          const commission = Number(match.commissionRate) || 20;
+          return {
+            code: (match.code || match.affiliateCode).toUpperCase(),
+            discountPercent: discount,
+            firstMonthOnly: false,
+            partnerId: `affiliate_${match.id}`,
+            partnerName: match.name || match.affiliateName || 'Partenaire Affilié',
+            partnerCommissionPercent: commission,
+            active: true,
+            allowedPlans: ['starter', 'monthly', 'quarterly', 'school_year', 'annual'],
+            bonusCredits: {
+              starter: 50,
+              monthly: 100,
+              quarterly: 300,
+              school_year: 1000,
+              default: 100,
+            },
+            description: `Code partenaire ${match.name} (-${discount}% de réduction + crédits bonus)`,
+          };
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[findPromoCode] Erreur lecture affiliés dynamique :', err);
+  }
+
   return null;
 }
 
@@ -3035,6 +3088,26 @@ app.get('/api/teacher/me', (req, res) => {
   const copiesUsed = teacher.copiesCorrected || 0;
   const remaining = Math.max(0, currentQuota - copiesUsed);
 
+  // Vérifier si l'enseignant est également ambassadeur / affilié
+  let isAffiliate = Boolean(teacher.isAffiliate);
+  let affiliateCode = teacher.affiliateCode || '';
+  try {
+    const affData = loadAffiliatesData();
+    const matchedAff = (affData.affiliates || []).find(
+      (a: any) =>
+        (a.email && teacher.email && a.email.toLowerCase() === teacher.email.toLowerCase()) ||
+        (a.phone && teacher.whatsapp && a.phone.replace(/[^0-9]/g, '') === teacher.whatsapp.replace(/[^0-9]/g, ''))
+    );
+    if (matchedAff) {
+      isAffiliate = true;
+      if (!affiliateCode) {
+        affiliateCode = matchedAff.code || matchedAff.affiliateCode || '';
+      }
+    }
+  } catch {}
+
+  const role = teacher.role === 'admin' ? 'admin' : (isAffiliate ? 'affiliate' : (teacher.role || 'teacher'));
+
   res.json({
     id: teacher.id,
     name: teacher.name,
@@ -3043,6 +3116,9 @@ app.get('/api/teacher/me', (req, res) => {
     school: teacher.school,
     plan: teacher.plan,
     status: teacher.status,
+    role,
+    affiliateCode,
+    isAffiliate,
     quota: currentQuota,
     copiesCorrected: copiesUsed,
     subscriptionCredits: teacher.subscriptionCredits || 0,
@@ -3583,7 +3659,7 @@ function fulfillPaidOrder(params: FulfillPaymentParams) {
     }
   }
 
-  // Handle promo code tracking if applicable
+  // Handle promo code tracking & affiliate commission credit
   const rawCode = (promoCode || '').toString().trim();
   let appliedPromo: PromoCodeConfig | null = null;
   if (rawCode) {
@@ -3593,6 +3669,42 @@ function fulfillPaidOrder(params: FulfillPaymentParams) {
       teacher.firstPurchaseDiscountUsed = true;
       if (appliedPromo.partnerName) {
         teacher.referredByPartner = appliedPromo.partnerName;
+      }
+
+      // Créditer immédiatement l'affilié dans affiliates.json
+      try {
+        const affData = loadAffiliatesData();
+        const matchedAffiliate = (affData.affiliates || []).find((a: any) =>
+          (a.code || a.affiliateCode || '').toUpperCase() === appliedPromo!.code.toUpperCase() ||
+          `affiliate_${a.id}` === appliedPromo!.partnerId
+        );
+
+        if (matchedAffiliate) {
+          const commPercent = Number(matchedAffiliate.commissionRate) || appliedPromo.partnerCommissionPercent || 20;
+          const commAmount = isXof
+            ? Math.round(finalPriceFcfa * (commPercent / 100))
+            : Math.round(finalPriceFcfa * (commPercent / 100)); // en FCFA
+          
+          matchedAffiliate.totalClientsGenerated = (matchedAffiliate.totalClientsGenerated || 0) + 1;
+          matchedAffiliate.totalCommissionEarned = (matchedAffiliate.totalCommissionEarned || 0) + commAmount;
+          matchedAffiliate.totalCommissionAccumulated = (matchedAffiliate.totalCommissionAccumulated || 0) + commAmount;
+          matchedAffiliate.commissionDue = (matchedAffiliate.commissionDue || 0) + commAmount;
+
+          if (!Array.isArray(matchedAffiliate.clients)) matchedAffiliate.clients = [];
+          matchedAffiliate.clients.unshift({
+            id: 'client_' + Date.now().toString(36),
+            name: teacher.name,
+            email: teacher.email,
+            plan: selectedPlan.name,
+            pricePaid: isXof ? finalPriceFcfa : Math.round(finalPriceEur * 655.957),
+            commission: commAmount,
+            date: new Date().toISOString().slice(0, 10),
+          });
+
+          saveAffiliatesData(affData);
+        }
+      } catch (err) {
+        console.warn('[Affiliate Tracking] Erreur crédit commission :', err);
       }
     }
   }
@@ -5412,7 +5524,47 @@ app.post('/api/admin/affiliates', requireAdminAuth, (req, res) => {
     };
 
     data.affiliates.unshift(newAffiliate);
+
+    // 1. Ajouter automatiquement l'email dans les adresses autorisées
+    const cleanEmail = (email || '').trim().toLowerCase();
+    if (!Array.isArray(data.authorizedEmails)) data.authorizedEmails = [];
+    if (!data.authorizedEmails.includes(cleanEmail)) {
+      data.authorizedEmails.push(cleanEmail);
+    }
     
+    // 2. Provisionner ou mettre à jour le compte utilisateur dans leads.json avec le rôle 'affiliate'
+    try {
+      const leads = loadLeads();
+      let lead = leads.find((l) => l.email && l.email.trim().toLowerCase() === cleanEmail);
+      if (lead) {
+        lead.role = 'affiliate';
+        lead.affiliateCode = cleanCode;
+        lead.isAffiliate = true;
+        if (phone && !lead.whatsapp) lead.whatsapp = phone;
+      } else {
+        leads.unshift({
+          id: `lead_${Date.now()}`,
+          name: name.trim(),
+          email: cleanEmail,
+          whatsapp: phone || '',
+          school: 'Partenaire Affilié Praxis',
+          role: 'affiliate',
+          affiliateCode: cleanCode,
+          isAffiliate: true,
+          plan: 'trial',
+          quota: 15,
+          subscriptionCredits: 15,
+          extraCredits: 0,
+          copiesCorrected: 0,
+          status: 'active',
+          createdAt: new Date().toISOString(),
+        });
+      }
+      saveLeads(leads);
+    } catch (leadErr) {
+      console.warn('[Affiliate Init] Erreur sync leads.json :', leadErr);
+    }
+
     // Log d'action
     if (!Array.isArray(data.actionLogs)) data.actionLogs = [];
     data.actionLogs.unshift({
@@ -5420,19 +5572,25 @@ app.post('/api/admin/affiliates', requireAdminAuth, (req, res) => {
       date: new Date().toISOString(),
       action: 'Création affilié',
       affiliateName: name,
-      details: `Création du compte affilié pour ${name} (Code: ${cleanCode}, Taux: ${rate}%). Contrat et identifiant générés.`,
+      details: `Création du compte affilié pour ${name} (Code: ${cleanCode}, Taux: ${rate}%). Compte utilisateur et code promo activés.`,
     });
 
     saveAffiliatesData(data);
 
+    const hostUrl = (process.env.APP_URL || `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
+    const inviteUrl = `${hostUrl}/#affiliate?code=${encodeURIComponent(cleanCode)}`;
+
     // Alerte Telegram
-    const telegramMsg = `🤝 <b>Nouveau Partenaire Affilié Enregistré</b>\n\n👤 <b>Nom :</b> ${escapeTelegramHtml(name)}\n📧 <b>Email :</b> <code>${escapeTelegramHtml(email)}</code>\n📱 <b>Tél :</b> ${escapeTelegramHtml(phone || 'Non renseigné')}\n🎟️ <b>Code Promo :</b> <code>${escapeTelegramHtml(cleanCode)}</code>\n💰 <b>Taux :</b> ${rate}%\n\n🕒 <b>Date :</b> ${new Date().toLocaleString('fr-FR')}`;
+    const telegramMsg = `🤝 <b>Nouveau Partenaire Affilié Enregistré</b>\n\n👤 <b>Nom :</b> ${escapeTelegramHtml(name)}\n📧 <b>Email :</b> <code>${escapeTelegramHtml(email)}</code>\n📱 <b>Tél :</b> ${escapeTelegramHtml(phone || 'Non renseigné')}\n🎟️ <b>Code Promo :</b> <code>${escapeTelegramHtml(cleanCode)}</code>\n💰 <b>Taux Commission :</b> ${rate}%\n🔗 <b>Lien Ambassadeur :</b> ${inviteUrl}\n\n🕒 <b>Date :</b> ${new Date().toLocaleString('fr-FR')}`;
     sendTelegramNotification(telegramMsg).catch(() => {});
 
     res.json({
       success: true,
       message: `Affilié ${name} créé avec succès (Code promo : ${cleanCode}).`,
       affiliate: newAffiliate,
+      inviteUrl,
+      code: cleanCode,
+      rate,
     });
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Erreur création affilié.' });

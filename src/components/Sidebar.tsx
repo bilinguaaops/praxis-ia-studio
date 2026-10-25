@@ -130,8 +130,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
     },
     ...(typeof window !== 'undefined' &&
     (currentLead?.role === 'partner' ||
+      currentLead?.role === 'affiliate' ||
+      currentLead?.role === 'ambassadeur' ||
+      currentLead?.isAffiliate ||
+      Boolean(currentLead?.affiliateCode) ||
       currentLead?.role === 'admin' ||
-      sessionStorage.getItem('praxis_affiliate_authorized') === 'true')
+      sessionStorage.getItem('praxis_affiliate_authorized') === 'true' ||
+      Boolean(localStorage.getItem('praxis_affiliate_code')))
       ? [
           {
             id: 'affiliate' as MainView,

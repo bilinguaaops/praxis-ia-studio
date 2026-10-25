@@ -418,8 +418,17 @@ export const AuthView: React.FC<AuthViewProps> = ({
           extraCredits: data.extraCredits || 0,
           copiesCorrected: data.copiesCorrected || 0,
           userId: data.id,
-          role: 'teacher',
+          role: data.role || (data.isAffiliate ? 'affiliate' : 'teacher'),
+          affiliateCode: data.affiliateCode || '',
+          isAffiliate: Boolean(data.isAffiliate),
         };
+
+        if (data.affiliateCode) {
+          try {
+            localStorage.setItem('praxis_affiliate_code', data.affiliateCode);
+            sessionStorage.setItem('praxis_affiliate_authorized', 'true');
+          } catch {}
+        }
 
         localStorage.setItem('praxis_lead', JSON.stringify(lead));
         localStorage.setItem('cpro_lead', JSON.stringify(lead));
