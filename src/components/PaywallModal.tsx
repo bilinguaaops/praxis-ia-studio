@@ -577,7 +577,7 @@ export const PaywallModal: React.FC<PaywallModalProps> = ({
                   <>Code affilié <strong>{appliedPromo.code}</strong> activé :</>
                 )}
                 {appliedPromo.bonusCredits ? (
-                  <span className="text-blue-700 font-bold"> 🎁 +{appliedPromo.bonusCredits} crédits bonus offerts !</span>
+                  <span className="text-blue-700 font-bold"> 🎁 +{appliedPromo.bonusCredits} copies supplémentaires offertes !</span>
                 ) : null}
                 {appliedPromo.partnerName && (
                   <span className="text-emerald-700"> · Partenaire : {appliedPromo.partnerName}</span>
@@ -1387,7 +1387,7 @@ export const PaywallModal: React.FC<PaywallModalProps> = ({
                       <>✓ Code affilié {appliedPromo.code} activé</>
                     )}
                     {appliedPromo.bonusCredits ? (
-                      <span className="text-blue-700"> : 🎁 +{appliedPromo.bonusCredits} crédits bonus offerts !</span>
+                      <span className="text-blue-700"> : 🎁 +{appliedPromo.bonusCredits} copies supplémentaires offertes !</span>
                     ) : null}
                   </p>
                 )}
@@ -1407,7 +1407,7 @@ export const PaywallModal: React.FC<PaywallModalProps> = ({
                   {appliedPromo?.bonusCredits ? (
                     <div className="flex justify-between text-blue-700 font-bold">
                       <span>Bonus Partenaire</span>
-                      <span>+{appliedPromo.bonusCredits} crédits offerts</span>
+                      <span>+{appliedPromo.bonusCredits} copies offertes</span>
                     </div>
                   ) : null}
                   <div className="border-t border-slate-200 pt-1.5 flex justify-between font-bold text-slate-900 text-sm">

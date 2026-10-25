@@ -243,11 +243,11 @@ export function findPromoCode(inputCode: string | undefined | null): PromoCodeCo
         });
 
         if (match && match.status !== 'Inactif' && match.status !== 'Suspendu' && match.status !== 'Résilié') {
-          const discount = Number(match.discountPercent) || 10;
+          // L'avantage affilié : 0% de réduction financière, +100 copies supplémentaires offertes
           const commission = Number(match.commissionRate) || 20;
           return {
             code: (match.code || match.affiliateCode).toUpperCase(),
-            discountPercent: discount,
+            discountPercent: 0,
             firstMonthOnly: false,
             partnerId: `affiliate_${match.id}`,
             partnerName: match.name || match.affiliateName || 'Partenaire Affilié',
@@ -255,13 +255,13 @@ export function findPromoCode(inputCode: string | undefined | null): PromoCodeCo
             active: true,
             allowedPlans: ['starter', 'monthly', 'quarterly', 'school_year', 'annual'],
             bonusCredits: {
-              starter: 50,
+              starter: 100,
               monthly: 100,
-              quarterly: 300,
-              school_year: 1000,
+              quarterly: 100,
+              school_year: 100,
               default: 100,
             },
-            description: `Code partenaire ${match.name} (-${discount}% de réduction + crédits bonus)`,
+            description: `Code partenaire ${match.name} (+100 copies supplémentaires offertes)`,
           };
         }
       }
@@ -3203,7 +3203,7 @@ app.post('/api/promo/validate', (req, res) => {
     partnerName: promo.partnerName,
     message: promo.discountPercent > 0
       ? `✓ Code ${promo.code} appliqué (-${promo.discountPercent}%${bonusNotice})`
-      : `✓ Code affilié ${promo.code} activé : 🎁 +${bonusCredits} crédits bonus offerts !`,
+      : `✓ Code partenaire ${promo.code} activé : 🎁 +${bonusCredits} copies supplémentaires offertes !`,
   });
 });
 

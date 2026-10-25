@@ -1694,7 +1694,7 @@ export const PricingPage: React.FC<PricingPageProps> = ({
                               <>Code affilié <strong>{appliedPromo.code}</strong> activé :</>
                             )}
                             {appliedPromo.bonusCredits ? (
-                              <span className="font-bold text-blue-700 dark:text-blue-300"> 🎁 +{appliedPromo.bonusCredits} crédits bonus offerts !</span>
+                              <span className="font-bold text-blue-700 dark:text-blue-300"> 🎁 +{appliedPromo.bonusCredits} copies supplémentaires offertes !</span>
                             ) : null}
                           </span>
                         </div>

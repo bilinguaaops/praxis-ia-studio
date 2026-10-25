@@ -2472,10 +2472,10 @@ export const AdminAffiliatesView: React.FC<AdminAffiliatesViewProps> = ({ onNoti
                   {createdAffiliateSuccess.rate || createdAffiliateSuccess.affiliate?.commissionRate || 20}% de commission
                 </span>
                 <span className="text-[11px] text-blue-300 block mt-0.5">
-                  🎁 -10% de réduction pour ses filleuls
+                  🎁 +100 copies supplémentaires offertes
                 </span>
                 <span className="text-[11px] text-slate-400 block">
-                  +100 à 1 000 crédits bonus offerts
+                  (Plein tarif sans réduction de prix)
                 </span>
               </div>
             </div>
@@ -2523,7 +2523,7 @@ export const AdminAffiliatesView: React.FC<AdminAffiliatesViewProps> = ({ onNoti
                 </span>
               </div>
               <div className="p-3 bg-[#0B0F17] rounded-xl border border-slate-800 text-[11px] text-slate-300 font-mono leading-relaxed select-all">
-                Bonjour {createdAffiliateSuccess.affiliate?.name || ''}, votre compte Partenaire Ambassadeur PRAXIS a été activé avec succès ! Votre code promo exclusif est {createdAffiliateSuccess.code || createdAffiliateSuccess.affiliate?.code} (offre -10% et crédits bonus à vos enseignants, avec {createdAffiliateSuccess.rate || 20}% de commission pour vous). Connectez-vous sur PRAXIS avec votre adresse {createdAffiliateSuccess.affiliate?.email} pour suivre vos commissions en direct : {createdAffiliateSuccess.inviteUrl || `https://praxis-pro.pro/#affiliate?code=${createdAffiliateSuccess.code}`}
+                Bonjour {createdAffiliateSuccess.affiliate?.name || ''}, votre compte Partenaire Ambassadeur PRAXIS a été activé avec succès ! Votre code promo exclusif est {createdAffiliateSuccess.code || createdAffiliateSuccess.affiliate?.code} (offre +100 copies supplémentaires gratuites à vos enseignants, avec {createdAffiliateSuccess.rate || 20}% de commission pour vous). Connectez-vous sur PRAXIS avec votre adresse {createdAffiliateSuccess.affiliate?.email} pour suivre vos commissions en direct : {createdAffiliateSuccess.inviteUrl || `https://praxis-pro.pro/#affiliate?code=${createdAffiliateSuccess.code}`}
               </div>
             </div>
 
@@ -2532,7 +2532,7 @@ export const AdminAffiliatesView: React.FC<AdminAffiliatesViewProps> = ({ onNoti
               {createdAffiliateSuccess.affiliate?.phone && (
                 <a
                   href={`https://wa.me/${createdAffiliateSuccess.affiliate.phone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(
-                    `Bonjour ${createdAffiliateSuccess.affiliate?.name || ''}, votre compte Partenaire Ambassadeur PRAXIS est actif ! Votre code promo exclusif est ${createdAffiliateSuccess.code || createdAffiliateSuccess.affiliate?.code} (-10% pour vos filleuls, ${createdAffiliateSuccess.rate || 20}% de commission pour vous). Accédez à votre Espace Ambassadeur : ${createdAffiliateSuccess.inviteUrl || `https://praxis-pro.pro/#affiliate?code=${createdAffiliateSuccess.code}`}`
+                    `Bonjour ${createdAffiliateSuccess.affiliate?.name || ''}, votre compte Partenaire Ambassadeur PRAXIS est actif ! Votre code promo exclusif est ${createdAffiliateSuccess.code || createdAffiliateSuccess.affiliate?.code} (+100 copies offertes pour vos filleuls, ${createdAffiliateSuccess.rate || 20}% de commission pour vous). Accédez à votre Espace Ambassadeur : ${createdAffiliateSuccess.inviteUrl || `https://praxis-pro.pro/#affiliate?code=${createdAffiliateSuccess.code}`}`
                   )}`}
                   target="_blank"
                   rel="noopener noreferrer"
@@ -2546,7 +2546,7 @@ export const AdminAffiliatesView: React.FC<AdminAffiliatesViewProps> = ({ onNoti
               <button
                 type="button"
                 onClick={() => {
-                  const text = `Bonjour ${createdAffiliateSuccess.affiliate?.name || ''}, votre compte Partenaire Ambassadeur PRAXIS a été activé avec succès ! Votre code promo exclusif est ${createdAffiliateSuccess.code || createdAffiliateSuccess.affiliate?.code} (offre -10% et crédits bonus à vos enseignants, avec ${createdAffiliateSuccess.rate || 20}% de commission pour vous). Connectez-vous sur PRAXIS avec votre adresse ${createdAffiliateSuccess.affiliate?.email} pour suivre vos commissions en direct : ${createdAffiliateSuccess.inviteUrl || `https://praxis-pro.pro/#affiliate?code=${createdAffiliateSuccess.code}`}`;
+                  const text = `Bonjour ${createdAffiliateSuccess.affiliate?.name || ''}, votre compte Partenaire Ambassadeur PRAXIS a été activé avec succès ! Votre code promo exclusif est ${createdAffiliateSuccess.code || createdAffiliateSuccess.affiliate?.code} (offre +100 copies supplémentaires gratuites à vos enseignants, avec ${createdAffiliateSuccess.rate || 20}% de commission pour vous). Connectez-vous sur PRAXIS avec votre adresse ${createdAffiliateSuccess.affiliate?.email} pour suivre vos commissions en direct : ${createdAffiliateSuccess.inviteUrl || `https://praxis-pro.pro/#affiliate?code=${createdAffiliateSuccess.code}`}`;
                   navigator.clipboard.writeText(text);
                   setCopiedInvite(true);
                   setTimeout(() => setCopiedInvite(false), 2500);

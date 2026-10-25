@@ -3,6 +3,13 @@
   "payoutRequests": [],
   "actionLogs": [
     {
+      "id": "log_mvnx7ito",
+      "date": "2026-10-25T14:26:02.892Z",
+      "action": "Création affilié",
+      "affiliateName": "Mamadou Toure",
+      "details": "Création du compte affilié pour Mamadou Toure (Code: TOURE2026, Taux: 20%). Compte utilisateur et code promo activés."
+    },
+    {
       "id": "log_mvnvj8bg",
       "date": "2026-10-25T13:39:09.916Z",
       "action": "Création affilié",
