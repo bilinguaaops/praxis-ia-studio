@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script>
+      (function() {
+        // Intercept Vite HMR WebSocket so it never throws "WebSocket closed without opened" in preview/proxy
+        if (typeof window !== 'undefined' && window.WebSocket) {
+          try {
+            var OrigWebSocket = window.WebSocket;
+            var ViteHmrSocket = function(url, protocols) {
+              if (
+                protocols === 'vite-hmr' ||
+                (Array.isArray(protocols) && protocols.indexOf('vite-hmr') !== -1) ||
+                (typeof url === 'string' && (url.indexOf('vite-hmr') !== -1 || url.indexOf('/@vite') !== -1 || url.indexOf('token=') !== -1))
+              ) {
+                var listeners = {};
+                var dummy = {
+                  url: url,
+                  readyState: 1, // OPEN
+                  CONNECTING: 0,
+                  OPEN: 1,
+                  CLOSING: 2,
+                  CLOSED: 3,
+                  bufferedAmount: 0,
+                  extensions: '',
+                  protocol: typeof protocols === 'string' ? protocols : (Array.isArray(protocols) ? protocols[0] || '' : ''),
+                  binaryType: 'blob',
+                  send: function() {},
+                  close: function() {},
+                  addEventListener: function(type, fn) {
+                    listeners[type] = listeners[type] || [];
+                    listeners[type].push(fn);
+                    if (type === 'open' && typeof fn === 'function') {
+                      try { fn({ type: 'open', target: dummy }); } catch(e) {}
+                    }
+                  },
+                  removeEventListener: function(type, fn) {
+                    if (listeners[type]) {
+                      listeners[type] = listeners[type].filter(function(cb) { return cb !== fn; });
+                    }
+                  },
+                  dispatchEvent: function() { return false; },
+                  onopen: null,
+                  onclose: null,
+                  onerror: null,
+                  onmessage: null
+                };
+                setTimeout(function() {
+                  if (typeof dummy.onopen === 'function') {
+                    try { dummy.onopen({ type: 'open', target: dummy }); } catch(e) {}
+                  }
+                }, 0);
+                return dummy;
+              }
+              return new OrigWebSocket(url, protocols);
+            };
+            ViteHmrSocket.prototype = OrigWebSocket.prototype;
+            ViteHmrSocket.CONNECTING = 0;
+            ViteHmrSocket.OPEN = 1;
+            ViteHmrSocket.CLOSING = 2;
+            ViteHmrSocket.CLOSED = 3;
+            window.WebSocket = ViteHmrSocket;
+          } catch (e) {}
+        }
+
+        // Suppress WebSocket / HMR network closure errors in dev/preview proxy environment
+        window.addEventListener('error', function(event) {
+          if (event && event.message && (
+            event.message.indexOf('WebSocket') !== -1 ||
+            event.message.indexOf('HMR') !== -1 ||
+            event.message.indexOf('closed without opened') !== -1
+          )) {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            return true;
+          }
+        }, true);
+
+        window.addEventListener('unhandledrejection', function(event) {
+          var reason = event && event.reason;
+          var msg = (reason && (reason.message || (typeof reason === 'string' ? reason : ''))) || '';
+          if (msg.indexOf('WebSocket') !== -1 || msg.indexOf('HMR') !== -1 || msg.indexOf('closed without opened') !== -1) {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+          }
+        }, true);
+
+        try {
+          var originalFetch = typeof window !== 'undefined' && window.fetch ? window.fetch.bind(window) : null;
+          var currentFetch = originalFetch;
+          var defineFetch = function(target) {
+            try {
+              Object.defineProperty(target, 'fetch', {
+                get: function() {
+                  return currentFetch;
+                },
+                set: function(newFetch) {
+                  currentFetch = newFetch;
+                },
+                configurable: true,
+                enumerable: true,
+              });
+            } catch (err) {}
+          };
+          if (typeof window !== 'undefined') {
+            defineFetch(window);
+            if (window.Window && window.Window.prototype) {
+              defineFetch(window.Window.prototype);
+            }
+          }
+        } catch (e) {}
+      })();
+    </script>
+    <title>PRAXIS PRO · Correction Pédagogique Intelligente</title>
+    <meta name="description" content="Plateforme pédagogique PRAXIS PRO (praxis-pro.pro) : correction intelligente des copies par IA Vision, carnet de notes et suivi des compétences." />
+    <meta property="og:title" content="PRAXIS PRO · Correction Pédagogique Intelligente" />
+    <meta property="og:description" content="Plateforme pédagogique PRAXIS PRO (praxis-pro.pro) : correction intelligente des copies par IA Vision, carnet de notes et suivi des compétences." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="theme-color" content="#0284c7" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Praxis IA" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="shortcut icon" href="/favicon.ico" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  </head>
+  <body class="bg-slate-50 text-slate-900 font-sans antialiased min-h-screen">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+

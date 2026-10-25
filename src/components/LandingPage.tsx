@@ -1,0 +1,1316 @@
+import React, { useState } from 'react';
+import {
+  Sparkles,
+  ArrowRight,
+  CheckCircle2,
+  Clock,
+  ShieldCheck,
+  Zap,
+  BookOpen,
+  FileCheck,
+  Users,
+  Award,
+  ChevronRight,
+  Check,
+  Star,
+  Quote,
+  Eye,
+  Calculator,
+  PenTool,
+  Sliders,
+  Download,
+  HelpCircle,
+  Play,
+  Phone,
+  Mail,
+  MessageCircle,
+  CreditCard,
+  Smartphone,
+} from 'lucide-react';
+import { FaqView } from './FaqView';
+import { PaywallPlanId, MainView } from '../types';
+import { PWAInstallButton } from './MobilePWAInstallModal';
+
+interface LandingPageProps {
+  onStartCorrection: () => void;
+  onNavigateToView: (view: MainView) => void;
+  onOpenContact?: () => void;
+  onOpenPaywall?: (planId?: PaywallPlanId) => void;
+}
+
+type DemoDiscipline = 'philo' | 'francais' | 'maths';
+
+export const LandingPage: React.FC<LandingPageProps> = ({
+  onStartCorrection,
+  onNavigateToView,
+  onOpenContact,
+  onOpenPaywall,
+}) => {
+  const [activeDemo, setActiveDemo] = useState<DemoDiscipline>('philo');
+  const [landingCurrency, setLandingCurrency] = useState<'XOF' | 'EUR'>('XOF');
+
+  const demoCases = {
+    philo: {
+      tag: 'Philosophie · Terminale',
+      topic: "Dissertation : « L'État est-il nécessairement l'ennemi de la liberté ? »",
+      studentName: 'Emma Rousseau',
+      grade: '15.5',
+      maxGrade: '20',
+      timeSaved: '28s',
+      criteria: [
+        { label: 'Problématisation & Définitions', score: '3.5 / 4', pct: '88%' },
+        { label: 'Rigueur argumentative & Plan dialectique', score: '4 / 4', pct: '100%' },
+        { label: 'Mobilisation des auteurs (Spinoza, Hobbes)', score: '4 / 5', pct: '80%' },
+        { label: 'Expression & Analyse conceptuelle', score: '4 / 7', pct: '57%' },
+      ],
+      handwrittenSnippet: `Page 2 - Partie II :
+"Si pour Thomas Hobbes dans le Léviathan, l'État impose l'ordre face à l'état de nature où l'homme est un loup pour l'homme, Spinoza démontre que la véritable fin de l'État n'est pas la contrainte mais la liberté."`,
+      feedback:
+        'Très bonne problématisation. La distinction conceptuelle entre sécurité négative (Hobbes) et liberté positive (Spinoza) est clairement articulée. Veillez toutefois à mieux soigner la transition vers la troisième partie sur la loi républicaine.',
+      strengths: ['Citation pertinente du Léviathan', 'Réfutation soignée du contresens sécuritaire'],
+      improvements: ['Nuancer l’antithèse avec la notion d’aliénation démocratique'],
+    },
+    francais: {
+      tag: 'Français · 1ère Générale',
+      topic: 'Commentaire littéraire : « L’Albatros », Charles Baudelaire',
+      studentName: 'Lucas Bernard',
+      grade: '14.0',
+      maxGrade: '20',
+      timeSaved: '22s',
+      criteria: [
+        { label: 'Compréhension du texte & Axes d’étude', score: '4 / 5', pct: '80%' },
+        { label: 'Analyse stylistique (oxymores, registres)', score: '4.5 / 5', pct: '90%' },
+        { label: 'Interprétation au service du sens', score: '3 / 5', pct: '60%' },
+        { label: 'Qualité de la rédaction & Transitions', score: '2.5 / 5', pct: '50%' },
+      ],
+      handwrittenSnippet: `Axe II - Le poète déchu :
+"L'antithèse entre 'prince des nuées' et 'infirme qui pleure' souligne la condition tragique du créateur poétique, incapable de marcher sur le sol terrestre sans être la risée des matelots."`,
+      feedback:
+        'Analyse fine et sensible des procédés poétiques. Le repérage de l’antithèse est parfaitement relié au statut d’exil du poète dans la société moderne. Attention à ne pas négliger la conclusion sur la modernité poétique baudelairienne.',
+      strengths: ['Justification stylistique précise', 'Vocabulaire littéraire maîtrisé'],
+      improvements: ['Développer la portée symbolique du vers final'],
+    },
+    maths: {
+      tag: 'Mathématiques · 3e / 2nde',
+      topic: 'Problème de géométrie & Démonstration : Théorème de Thalès et réciproque',
+      studentName: 'Sarah Benali',
+      grade: '17.5',
+      maxGrade: '20',
+      timeSaved: '18s',
+      criteria: [
+        { label: 'Hypothèses & Propriétés citées', score: '4 / 4', pct: '100%' },
+        { label: 'Calculs & Résolution algébrique', score: '5 / 5', pct: '100%' },
+        { label: 'Démonstration rigoureuse pas-à-pas', score: '4.5 / 5', pct: '90%' },
+        { label: 'Précision de l’unité et conclusion', score: '4 / 6', pct: '67%' },
+      ],
+      handwrittenSnippet: `Question 3 :
+"Puisque les droites (AB) et (CD) sont sécantes en O, et que (AC) // (BD), d'après le théorème de Thalès :
+OA/OB = OC/OD = AC/BD.
+Donc BD = (OB * AC) / OA = (4.5 * 6) / 3 = 9 cm."`,
+      feedback:
+        'Démonstration exemplaire et très bien rédigée. Toutes les conditions d’application du théorème de Thalès sont rigoureusement posées avant le calcul. Pensez à toujours souligner ou encadrer le résultat final pour la lisibilité.',
+      strengths: ['Rédaction géométrique parfaite', 'Calculs intermédiaires détaillés'],
+      improvements: ['Encadrer le résultat final avec l’unité'],
+    },
+  };
+
+  const [secretAdminClicks, setSecretAdminClicks] = useState<number>(0);
+
+  const handleSecretLogoClick = () => {
+    setSecretAdminClicks((prev) => {
+      const next = prev + 1;
+      if (next >= 4) {
+        onNavigateToView('admin');
+        return 0;
+      }
+      return next;
+    });
+    setTimeout(() => setSecretAdminClicks(0), 3000);
+  };
+
+  const currentCase = demoCases[activeDemo];
+
+  return (
+    <div className="min-h-screen bg-slate-50 text-slate-900 selection:bg-blue-100 selection:text-blue-900 w-full max-w-full overflow-x-hidden">
+      {/* 0. PUBLIC HEADER / NAVBAR */}
+      <header className="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-slate-200/80 px-3 sm:px-6 lg:px-8 h-16 flex items-center justify-between shadow-xs w-full max-w-full">
+        <div className="flex items-center gap-2 sm:gap-6 shrink-0 min-w-0">
+          <button
+            type="button"
+            onClick={handleSecretLogoClick}
+            className="flex items-center gap-1.5 sm:gap-2 cursor-pointer select-none shrink-0"
+            title="Praxis Éducation"
+          >
+            <div className="w-8 h-8 rounded-xl bg-blue-600 text-white flex items-center justify-center font-black text-base shadow-xs shrink-0">
+              P
+            </div>
+            <span className="font-extrabold text-base sm:text-lg tracking-tight text-slate-900">Praxis</span>
+            <span className="hidden sm:inline-block text-[10px] sm:text-[11px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-200 shrink-0">
+              Éducation
+            </span>
+          </button>
+
+          <nav className="hidden md:flex items-center gap-5 text-xs font-semibold text-slate-600">
+            <a href="#demo-interactive" className="hover:text-blue-600 transition-colors">
+              Démonstration
+            </a>
+            <button
+              type="button"
+              onClick={() => onNavigateToView('pricing')}
+              className="hover:text-blue-600 transition-colors cursor-pointer"
+            >
+              Tarifs
+            </button>
+            <button
+              type="button"
+              onClick={() => onNavigateToView('faq')}
+              className="hover:text-blue-600 transition-colors cursor-pointer"
+            >
+              Guide & FAQ
+            </button>
+          </nav>
+        </div>
+
+        <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
+          <div className="hidden md:block">
+            <PWAInstallButton />
+          </div>
+          <button
+            type="button"
+            onClick={() => onNavigateToView('login')}
+            className="px-2.5 sm:px-3.5 py-1.5 text-xs font-bold text-slate-700 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer shrink-0"
+          >
+            Connexion
+          </button>
+          <button
+            type="button"
+            onClick={() => onNavigateToView('register')}
+            className="inline-flex items-center gap-1 px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-xs transition-colors cursor-pointer shrink-0"
+          >
+            <span className="hidden sm:inline">Créer un compte</span>
+            <span className="sm:hidden">S'inscrire</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </header>
+
+      {/* 1. HERO SECTION */}
+      <section className="relative overflow-hidden pt-8 pb-16 lg:pt-14 lg:pb-24 border-b border-slate-200/80 bg-gradient-to-b from-white via-slate-50/70 to-slate-100/50">
+        {/* Subtle background ambient mesh */}
+        <div className="absolute inset-0 pointer-events-none overflow-hidden">
+          <div className="absolute -top-40 left-1/2 -translate-x-1/2 w-[900px] h-[500px] bg-gradient-to-tr from-blue-100/40 via-indigo-100/30 to-purple-100/20 rounded-full blur-3xl opacity-70" />
+          <div className="absolute top-1/2 -right-40 w-96 h-96 bg-blue-100/30 rounded-full blur-2xl" />
+        </div>
+
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 relative">
+          {/* Eyebrow badge */}
+          <div className="flex justify-center">
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-blue-50 border border-blue-200/80 shadow-xs mb-6 text-xs font-semibold text-blue-800">
+              <span className="flex h-2 w-2 rounded-full bg-blue-600 animate-pulse" />
+              <span>⚡ Correction express pour enseignants</span>
+              <span className="hidden sm:inline text-blue-400">·</span>
+              <span className="hidden sm:inline font-normal text-blue-700">100% Souverain & RGPD</span>
+            </div>
+          </div>
+
+          {/* Main Headline */}
+          <div className="text-center max-w-5xl mx-auto space-y-5">
+            <h1 className="text-3xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-slate-950 leading-[1.15]">
+              Corrigez les copies d'une classe en{' '}
+              <span className="inline-block whitespace-nowrap bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-800 bg-clip-text text-transparent">
+                30 secondes chrono.
+              </span>
+              <br className="hidden md:inline" />
+              {' '}Pas tout votre week-end.
+            </h1>
+
+            <p className="text-base sm:text-xl text-slate-600 max-w-2xl mx-auto leading-relaxed font-normal">
+              Photographiez ou scannez n'importe quelle copie manuscrite (dissertation, exercice,
+              commentaire ou problème de maths). Obtenez une note précise, des appréciations
+              constructives et un export Pronote direct en moins de 30 secondes.
+            </p>
+
+            {/* Action CTAs */}
+            <div className="pt-3 flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4">
+              <button
+                type="button"
+                onClick={onStartCorrection}
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-7 py-3.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-base shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 hover:-translate-y-0.5 active:translate-y-0 transition-all cursor-pointer"
+              >
+                <Sparkles className="w-5 h-5 text-blue-200" />
+                <span>Lancer une correction</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+
+              <a
+                href="#demo-interactive"
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl bg-white hover:bg-slate-50 text-slate-700 font-semibold text-base border border-slate-200 shadow-xs hover:border-slate-300 transition-all cursor-pointer"
+              >
+                <Play className="w-4 h-4 text-slate-500 fill-slate-500" />
+                <span>Voir la simulation en direct</span>
+              </a>
+
+              <PWAInstallButton variant="primary" className="w-full sm:w-auto py-3.5" />
+            </div>
+
+            {/* Trust highlights */}
+            <div className="pt-6 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs text-slate-500 font-medium">
+              <div className="flex items-center gap-1.5">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>Version Démo Ouverte & Gratuite</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>Reconnaissance de l'écriture manuscrite</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>Vous gardez 100% du contrôle</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 2. STATS BAR (Notie AI style impact numbers) */}
+      <section className="bg-white border-b border-slate-200/80 py-8 sm:py-10">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6 sm:gap-8 text-center">
+            <div className="space-y-1">
+              <div className="text-3xl sm:text-4xl font-extrabold text-blue-600 tracking-tight">30 sec</div>
+              <div className="text-xs sm:text-sm font-semibold text-slate-800">Par copie manuscrite</div>
+              <p className="text-[11px] sm:text-xs text-slate-500">Transcrit, évalué et annoté</p>
+            </div>
+
+            <div className="space-y-1">
+              <div className="text-3xl sm:text-4xl font-extrabold text-indigo-600 tracking-tight">+12 h</div>
+              <div className="text-xs sm:text-sm font-semibold text-slate-800">Gagnées chaque semaine</div>
+              <p className="text-[11px] sm:text-xs text-slate-500">Fini les dimanches gâchés</p>
+            </div>
+
+            <div className="space-y-1">
+              <div className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight">54+</div>
+              <div className="text-xs sm:text-sm font-semibold text-slate-800">Matières & Niveaux</div>
+              <p className="text-[11px] sm:text-xs text-slate-500">Du Collège aux Classes Prépa</p>
+            </div>
+
+            <div className="space-y-1">
+              <div className="text-3xl sm:text-4xl font-extrabold text-emerald-600 tracking-tight">100%</div>
+              <div className="text-xs sm:text-sm font-semibold text-slate-800">Souveraineté Enseignant</div>
+              <p className="text-[11px] sm:text-xs text-slate-500">Ajustez chaque note en 1 clic</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 3. INTERACTIVE LIVE PRODUCT DEMO (Signature Notie AI Experience) */}
+      <section id="demo-interactive" className="py-16 sm:py-24 max-w-6xl mx-auto px-4 sm:px-6 scroll-mt-16">
+        <div className="text-center max-w-3xl mx-auto mb-10 space-y-3">
+          <span className="text-xs font-bold uppercase tracking-wider text-blue-600 bg-blue-50 px-3 py-1 rounded-full border border-blue-100">
+            Démonstration Interactive
+          </span>
+          <h2 className="text-2xl sm:text-4xl font-extrabold text-slate-950 tracking-tight">
+            Voyez comment Praxis analyse une copie manuscrite
+          </h2>
+          <p className="text-sm sm:text-base text-slate-600">
+            Sélectionnez une discipline pour observer la lecture OCR, l'extraction de citations textuelles
+            et la génération de commentaires pédagogiques détaillés.
+          </p>
+
+          {/* Discipline selector pills */}
+          <div className="inline-flex p-1 bg-slate-200/70 rounded-xl gap-1 text-xs font-bold mt-2">
+            <button
+              type="button"
+              onClick={() => setActiveDemo('philo')}
+              className={`px-3.5 py-2 rounded-lg transition-all cursor-pointer ${
+                activeDemo === 'philo'
+                  ? 'bg-white text-blue-700 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              🎓 Philosophie
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveDemo('francais')}
+              className={`px-3.5 py-2 rounded-lg transition-all cursor-pointer ${
+                activeDemo === 'francais'
+                  ? 'bg-white text-blue-700 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              📚 Français
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveDemo('maths')}
+              className={`px-3.5 py-2 rounded-lg transition-all cursor-pointer ${
+                activeDemo === 'maths'
+                  ? 'bg-white text-blue-700 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              📐 Mathématiques
+            </button>
+          </div>
+        </div>
+
+        {/* The Split Screen Simulation Card */}
+        <div className="bg-white rounded-2xl sm:rounded-3xl border border-slate-200 shadow-xl overflow-hidden">
+          {/* Header bar of the demo card */}
+          <div className="px-5 py-3.5 bg-slate-900 text-white flex flex-wrap items-center justify-between gap-3 border-b border-slate-800">
+            <div className="flex items-center gap-3">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-500/20 text-blue-300 border border-blue-400/30">
+                {currentCase.tag}
+              </span>
+              <span className="text-xs text-slate-300 font-medium truncate max-w-xs sm:max-w-md">
+                {currentCase.topic}
+              </span>
+            </div>
+            <div className="flex items-center gap-3 text-xs">
+              <span className="flex items-center gap-1 text-emerald-400 font-medium">
+                <Zap className="w-3.5 h-3.5" />
+                <span>Analysé en {currentCase.timeSaved}</span>
+              </span>
+            </div>
+          </div>
+
+          {/* Split Content: Left = Handwritten student sheet, Right = Praxis AI analysis */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 divide-y lg:divide-y-0 lg:divide-x divide-slate-200">
+            {/* Left: Original manuscript paper mockup (5 cols) */}
+            <div className="lg:col-span-5 p-5 sm:p-6 bg-amber-50/30 flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between pb-3 border-b border-amber-200/60 mb-4">
+                  <div>
+                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">
+                      Copie manuscrite élève
+                    </span>
+                    <span className="text-sm font-bold text-slate-900">{currentCase.studentName}</span>
+                  </div>
+                  <span className="px-2 py-0.5 rounded text-[11px] font-mono bg-amber-100 text-amber-900 border border-amber-300">
+                    Scan photo OCR
+                  </span>
+                </div>
+
+                {/* Simulated lined paper with handwriting simulation */}
+                <div className="bg-white p-4 rounded-xl border border-amber-200/80 shadow-xs relative overflow-hidden font-serif">
+                  {/* Subtle faint notebook lines */}
+                  <div className="space-y-3 text-slate-800 text-xs sm:text-sm leading-relaxed italic">
+                    <p className="text-[11px] text-slate-400 font-mono not-italic uppercase tracking-wider">
+                      Extrait transcrit de la copie :
+                    </p>
+                    <div className="p-3 bg-amber-50/50 rounded-lg border-l-4 border-amber-400 font-mono text-xs not-italic text-slate-700 whitespace-pre-line">
+                      {currentCase.handwrittenSnippet}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-4 pt-3 border-t border-amber-200/40 text-[11px] text-slate-500 flex items-center gap-1.5">
+                <Check className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Vision multimodale : gère les ratures, écritures cursives et notations marginales.</span>
+              </div>
+            </div>
+
+            {/* Right: AI evaluation & critériated feedback (7 cols) */}
+            <div className="lg:col-span-7 p-5 sm:p-7 bg-white space-y-5">
+              {/* Score & Teacher Note header */}
+              <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-200/90">
+                <div>
+                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">
+                    Évaluation critériée
+                  </span>
+                  <span className="text-2xl font-extrabold text-blue-700">
+                    {currentCase.grade} <span className="text-sm font-semibold text-slate-400">/ {currentCase.maxGrade}</span>
+                  </span>
+                </div>
+                <div className="text-right">
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    Prêt pour Pronote
+                  </span>
+                </div>
+              </div>
+
+              {/* Criteria bars */}
+              <div className="space-y-2.5">
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-500 block">
+                  Détail par compétences / critères :
+                </span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                  {currentCase.criteria.map((crit, idx) => (
+                    <div key={idx} className="p-2.5 bg-slate-50 rounded-lg border border-slate-200/70 space-y-1">
+                      <div className="flex justify-between font-semibold text-slate-700">
+                        <span className="truncate">{crit.label}</span>
+                        <span className="text-blue-700 shrink-0 ml-1">{crit.score}</span>
+                      </div>
+                      <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                        <div className="h-full bg-blue-600 rounded-full" style={{ width: crit.pct }} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Pedagogical comment */}
+              <div className="p-3.5 bg-blue-50/50 rounded-xl border border-blue-100 space-y-1.5">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-blue-900">
+                  <Quote className="w-3.5 h-3.5 text-blue-600" />
+                  <span>Appréciation personnalisée proposée au professeur :</span>
+                </div>
+                <p className="text-xs text-slate-700 leading-relaxed font-normal">
+                  "{currentCase.feedback}"
+                </p>
+              </div>
+
+              {/* Strengths & Improvements */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                <div className="p-3 bg-emerald-50/60 rounded-xl border border-emerald-100 space-y-1">
+                  <span className="font-bold text-emerald-900 flex items-center gap-1">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Points forts :
+                  </span>
+                  <ul className="space-y-0.5 text-slate-600 pl-4 list-disc">
+                    {currentCase.strengths.map((str, i) => (
+                      <li key={i}>{str}</li>
+                    ))}
+                  </ul>
+                </div>
+
+                <div className="p-3 bg-amber-50/60 rounded-xl border border-amber-100 space-y-1">
+                  <span className="font-bold text-amber-900 flex items-center gap-1">
+                    <Award className="w-3.5 h-3.5 text-amber-600" /> Axe de progrès prioritaire :
+                  </span>
+                  <ul className="space-y-0.5 text-slate-600 pl-4 list-disc">
+                    {currentCase.improvements.map((imp, i) => (
+                      <li key={i}>{imp}</li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+
+              {/* Action buttons on demo */}
+              <div className="pt-2 flex items-center justify-between">
+                <span className="text-[11px] text-slate-400">
+                  * L'enseignant peut ajuster la note ou le commentaire en un clic.
+                </span>
+                <button
+                  type="button"
+                  onClick={onStartCorrection}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-all shadow-xs cursor-pointer"
+                >
+                  <span>Tester avec mes propres copies</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 4. HOW IT WORKS (3 Simple Steps inspired by Notie AI) */}
+      <section className="py-16 sm:py-20 bg-slate-100/60 border-y border-slate-200">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6">
+          <div className="text-center max-w-2xl mx-auto mb-14 space-y-3">
+            <span className="text-xs font-bold uppercase tracking-wider text-blue-600 bg-blue-50 px-3 py-1 rounded-full border border-blue-100">
+              Processus Pédagogique
+            </span>
+            <h2 className="text-2xl sm:text-4xl font-extrabold text-slate-950 tracking-tight">
+              Comment ça marche en 3 étapes simples
+            </h2>
+            <p className="text-sm sm:text-base text-slate-600">
+              Aucune formation technique requise. Une prise en main instantanée pensée pour le quotidien de la classe.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 relative">
+            {/* Step 1 */}
+            <div className="bg-white p-7 rounded-2xl border border-slate-200 shadow-xs relative space-y-4 hover:shadow-md transition-shadow">
+              <div className="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 font-extrabold text-xl flex items-center justify-center border border-blue-100">
+                1
+              </div>
+              <h3 className="text-lg font-bold text-slate-900">Définissez votre sujet & barème</h3>
+              <p className="text-sm text-slate-600 leading-relaxed">
+                Renseignez le barème sur 20, ou photographiez simplement votre corrigé manuscrit. Praxis comprend vos attentes et critères d'évaluation.
+              </p>
+              <div className="pt-2 text-xs font-medium text-blue-600 flex items-center gap-1">
+                <Check className="w-3.5 h-3.5" /> Tolérance orthographique ou barème strict paramétrable
+              </div>
+            </div>
+
+            {/* Step 2 */}
+            <div className="bg-white p-7 rounded-2xl border border-slate-200 shadow-xs relative space-y-4 hover:shadow-md transition-shadow">
+              <div className="w-12 h-12 rounded-xl bg-indigo-50 text-indigo-600 font-extrabold text-xl flex items-center justify-center border border-indigo-100">
+                2
+              </div>
+              <h3 className="text-lg font-bold text-slate-900">Déposez les copies d'élèves</h3>
+              <p className="text-sm text-slate-600 leading-relaxed">
+                Prenez en photo les copies avec votre smartphone ou glissez le fichier PDF scanné de la classe entière. L'OCR Vision lit chaque page simultanément.
+              </p>
+              <div className="pt-2 text-xs font-medium text-indigo-600 flex items-center gap-1">
+                <Check className="w-3.5 h-3.5" /> Copies simples ou copies doubles multi-pages
+              </div>
+            </div>
+
+            {/* Step 3 */}
+            <div className="bg-white p-7 rounded-2xl border border-slate-200 shadow-xs relative space-y-4 hover:shadow-md transition-shadow">
+              <div className="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 font-extrabold text-xl flex items-center justify-center border border-emerald-100">
+                3
+              </div>
+              <h3 className="text-lg font-bold text-slate-900">Validez & Restituez à la classe</h3>
+              <p className="text-sm text-slate-600 leading-relaxed">
+                Passez en revue les suggestions de notes et d'appréciations. Ajustez en un clic si nécessaire, puis exportez vers Pronote ou imprimez les fiches élèves.
+              </p>
+              <div className="pt-2 text-xs font-medium text-emerald-600 flex items-center gap-1">
+                <Check className="w-3.5 h-3.5" /> Export Excel/Pronote & fiches PDF individuelles
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 5. BENTO GRID FEATURES (Capabilities inspired by Notie AI) */}
+      <section className="py-16 sm:py-24 max-w-6xl mx-auto px-4 sm:px-6">
+        <div className="text-center max-w-2xl mx-auto mb-14 space-y-3">
+          <span className="text-xs font-bold uppercase tracking-wider text-blue-600 bg-blue-50 px-3 py-1 rounded-full border border-blue-100">
+            Fonctionnalités Clés
+          </span>
+          <h2 className="text-2xl sm:text-4xl font-extrabold text-slate-950 tracking-tight">
+            Tout ce dont vous avez besoin pour évaluer sereinement
+          </h2>
+          <p className="text-sm sm:text-base text-slate-600">
+            Une technologie de vision IA avancée spécialement calibrée pour le système scolaire et universitaire.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {/* Card 1: OCR Vision Poussée */}
+          <div className="bg-white p-6 sm:p-8 rounded-2xl border border-slate-200 shadow-xs space-y-3 hover:border-slate-300 transition-colors">
+            <div className="w-10 h-10 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
+              <Eye className="w-5 h-5" />
+            </div>
+            <h3 className="text-base font-bold text-slate-900">Lecture Manuscrite Multi-Pages</h3>
+            <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+              Déchiffre les écritures cursives d'élèves, les ratures, les ajouts en marge et les copies doubles de 4 à 6 pages sans aucune perte de fil directeur.
+            </p>
+          </div>
+
+          {/* Card 2: Matières Littéraires & Philosophie */}
+          <div className="bg-white p-6 sm:p-8 rounded-2xl border border-slate-200 shadow-xs space-y-3 hover:border-slate-300 transition-colors">
+            <div className="w-10 h-10 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center">
+              <BookOpen className="w-5 h-5" />
+            </div>
+            <h3 className="text-base font-bold text-slate-900">Analyse Littéraire & Philosophique</h3>
+            <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+              Évalue la problématisation, la dialectique du plan, la mobilisation des doctrines et cite directement les phrases de l'élève pour justifier chaque retour.
+            </p>
+          </div>
+
+          {/* Card 3: Calculs Scientifiques Pas-à-Pas */}
+          <div className="bg-white p-6 sm:p-8 rounded-2xl border border-slate-200 shadow-xs space-y-3 hover:border-slate-300 transition-colors">
+            <div className="w-10 h-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
+              <Calculator className="w-5 h-5" />
+            </div>
+            <h3 className="text-base font-bold text-slate-900">Démonstrations Scientifiques</h3>
+            <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+              En Maths et Physique-Chimie, Praxis vérifie la méthode étape par étape et accorde les points intermédiaires même si le résultat final comporte une faute de calcul.
+            </p>
+          </div>
+
+          {/* Card 4: Appréciations Constructives */}
+          <div className="bg-white p-6 sm:p-8 rounded-2xl border border-slate-200 shadow-xs space-y-3 hover:border-slate-300 transition-colors">
+            <div className="w-10 h-10 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center">
+              <Quote className="w-5 h-5" />
+            </div>
+            <h3 className="text-base font-bold text-slate-900">Commentaires Bienveillants & Formateurs</h3>
+            <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+              Finies les appréciations lapidaires. Chaque élève reçoit une explication claire sur ses réussites et un conseil précis pour progresser au prochain devoir.
+            </p>
+          </div>
+
+          {/* Card 5: Suivi de Classe & Remédiation */}
+          <div className="bg-white p-6 sm:p-8 rounded-2xl border border-slate-200 shadow-xs space-y-3 hover:border-slate-300 transition-colors">
+            <div className="w-10 h-10 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center">
+              <Users className="w-5 h-5" />
+            </div>
+            <h3 className="text-base font-bold text-slate-900">Détection des Lacunes Collectives</h3>
+            <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+              Un tableau de bord identifie instantanément les questions mal réussies par la classe entière, vous permettant d'organiser des séances de remédiation ciblées.
+            </p>
+          </div>
+
+          {/* Card 6: Export Pronote & ÉcoleDirecte */}
+          <div className="bg-white p-6 sm:p-8 rounded-2xl border border-slate-200 shadow-xs space-y-3 hover:border-slate-300 transition-colors">
+            <div className="w-10 h-10 rounded-lg bg-sky-50 text-sky-600 flex items-center justify-center">
+              <Download className="w-5 h-5" />
+            </div>
+            <h3 className="text-base font-bold text-slate-900">Intégration Pronote & ÉcoleDirecte</h3>
+            <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+              Exportez le tableau des notes au format compatible en 1 clic pour remplir votre relevé de notes officiel sans aucune saisie manuelle fastidieuse.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* 6. TEACHER TESTIMONIALS (Social Proof) */}
+      <section className="py-16 sm:py-20 bg-slate-900 text-white relative overflow-hidden">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 relative">
+          <div className="text-center max-w-2xl mx-auto mb-14 space-y-3">
+            <span className="text-xs font-bold uppercase tracking-wider text-blue-400 bg-blue-950/80 px-3 py-1 rounded-full border border-blue-800">
+              Retours d'Expérience
+            </span>
+            <h2 className="text-2xl sm:text-4xl font-extrabold tracking-tight">
+              Adopté par des professeurs passionnés
+            </h2>
+            <p className="text-sm sm:text-base text-slate-400">
+              Découvrez comment vos collègues ont récupéré leur temps tout en offrant des retours plus riches à leurs élèves.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="bg-slate-800/80 border border-slate-700/80 p-6 rounded-2xl space-y-4">
+              <div className="flex text-amber-400 gap-1">
+                {[...Array(5)].map((_, i) => (
+                  <Star key={i} className="w-4 h-4 fill-amber-400" />
+                ))}
+              </div>
+              <p className="text-xs sm:text-sm text-slate-300 leading-relaxed italic">
+                "J'avais 3 classes de Terminale en Philosophie, soit plus de 90 dissertations à chaque devoir commun. Praxis m'a permis de pré-évaluer le plan dialectique et les références en un temps record. Je garde la main sur la note finale, mais je ne passe plus mes nuits à annoter."
+              </p>
+              <div className="pt-2 border-t border-slate-700 text-xs">
+                <span className="font-bold text-white block">Valérie D.</span>
+                <span className="text-slate-400">Professeure agrégée de Philosophie · Lycée public</span>
+              </div>
+            </div>
+
+            <div className="bg-slate-800/80 border border-slate-700/80 p-6 rounded-2xl space-y-4">
+              <div className="flex text-amber-400 gap-1">
+                {[...Array(5)].map((_, i) => (
+                  <Star key={i} className="w-4 h-4 fill-amber-400" />
+                ))}
+              </div>
+              <p className="text-xs sm:text-sm text-slate-300 leading-relaxed italic">
+                "En Mathématiques, la détection des calculs intermédiaires est bluffante. Quand un élève se trompe sur la dernière ligne mais a fait un raisonnement juste, Praxis attribue les points partiels comme je l'aurais fait moi-même."
+              </p>
+              <div className="pt-2 border-t border-slate-700 text-xs">
+                <span className="font-bold text-white block">Thomas B.</span>
+                <span className="text-slate-400">Professeur certifié de Mathématiques · Collège</span>
+              </div>
+            </div>
+
+            <div className="bg-slate-800/80 border border-slate-700/80 p-6 rounded-2xl space-y-4">
+              <div className="flex text-amber-400 gap-1">
+                {[...Array(5)].map((_, i) => (
+                  <Star key={i} className="w-4 h-4 fill-amber-400" />
+                ))}
+              </div>
+              <p className="text-xs sm:text-sm text-slate-300 leading-relaxed italic">
+                "Les élèves adorent les fiches de restitution imprimées. Au lieu d'un simple '11/20 Bien', ils reçoivent des citations précises de leur copie et des axes d'amélioration. La relation pédagogique est décuplée."
+              </p>
+              <div className="pt-2 border-t border-slate-700 text-xs">
+                <span className="font-bold text-white block">Sarah L.</span>
+                <span className="text-slate-400">Professeure de Lettres Modernes · Lycée</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 7. FAQ SECTION AT THE BOTTOM OF THE HOME PAGE (As requested by user) */}
+      <section className="py-16 sm:py-24 max-w-5xl mx-auto px-4 sm:px-6">
+        <FaqView onStartCorrection={onStartCorrection} onOpenContact={onOpenContact} />
+      </section>
+
+      {/* 7.5 PRICING & PAYMENT METHODS SECTION (WAVE & CARTE BANCAIRE) */}
+      {/* 7. TARIFS & PACKS SECTION (POPCORN PRICING PREMIUM) */}
+      <section id="section-tarifs" className="py-16 sm:py-24 bg-white border-t border-slate-200">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 space-y-12">
+          {/* Header & Subtitle */}
+          <div className="text-center max-w-3xl mx-auto space-y-4">
+            <span className="text-xs font-black tracking-widest uppercase text-blue-700 bg-blue-100/80 px-3.5 py-1 rounded-full border border-blue-200 inline-block">
+              PRAXIS — TARIFS
+            </span>
+
+            <h2 className="text-3xl sm:text-5xl font-black text-slate-900 tracking-tight leading-tight">
+              Corrigez plus. <br />
+              <span className="text-blue-600">Passez moins de temps à corriger.</span>
+            </h2>
+
+            <p className="text-sm sm:text-base text-slate-600 leading-relaxed max-w-2xl mx-auto">
+              Commencez gratuitement, puis choisissez la formule qui correspond à votre rythme de correction.
+            </p>
+
+            {/* Free trial guarantee badge */}
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs sm:text-sm font-bold shadow-xs">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span>15 corrections offertes · Aucune carte bancaire requise</span>
+            </div>
+
+            {/* Direct Link to PricingPage */}
+            <div className="pt-1">
+              <button
+                type="button"
+                onClick={() => onNavigateToView('pricing')}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-800 hover:from-blue-100 hover:to-indigo-100 text-xs font-bold border border-blue-200/80 transition-all cursor-pointer shadow-xs"
+              >
+                <Calculator className="w-3.5 h-3.5 text-blue-600" />
+                <span>Simulateur selon vos classes & Page détaillée des Tarifs</span>
+                <span className="px-1.5 py-0.5 rounded bg-amber-400 text-slate-950 font-black text-[10px]">-30%</span>
+                <ArrowRight className="w-3.5 h-3.5 text-blue-600" />
+              </button>
+            </div>
+          </div>
+
+          {/* Popcorn Pricing 3 Columns */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 lg:gap-8 items-stretch">
+            {/* PLAN 1: MENSUEL */}
+            <div className="bg-white rounded-3xl border border-slate-200 p-6 sm:p-7 flex flex-col justify-between hover:shadow-md transition-all shadow-xs relative">
+              <div className="space-y-4">
+                <div>
+                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">
+                    Mensuel
+                  </span>
+                  <h3 className="text-xl font-extrabold text-slate-900 mt-0.5">Mensuel Pro</h3>
+                </div>
+
+                {/* Price in EUR first, then FCFA below */}
+                <div className="py-3 border-y border-slate-100 space-y-1">
+                  <div className="flex items-baseline gap-1.5">
+                    <span className="text-3xl sm:text-4xl font-black text-slate-900 font-mono">
+                      7,60 €
+                    </span>
+                    <span className="text-xs font-semibold text-slate-500">/ mois</span>
+                  </div>
+                  <div className="text-xs font-semibold text-slate-600">
+                    Soit <strong className="text-slate-900 font-mono">5 000 FCFA</strong> par mois
+                  </div>
+                </div>
+
+                {/* Highlighted Corrections count underneath price */}
+                <div className="bg-blue-50/70 border border-blue-200/80 rounded-2xl p-3 text-center">
+                  <span className="text-2xl font-black text-blue-900 font-mono block">500</span>
+                  <span className="text-xs font-bold text-blue-700">corrections / mois</span>
+                  <span className="text-[10px] text-blue-600 block mt-0.5">Cumulable jusqu'à 1 500*</span>
+                </div>
+
+                <ul className="text-xs text-slate-600 space-y-2.5 pt-1">
+                  <li className="flex items-start gap-2">
+                    <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                    <span>Correction par lots</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                    <span>Barème personnalisé</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                    <span>Commentaires et annotations</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                    <span>Statistiques de classe</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                    <span>Export des résultats</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                    <span><strong>Corrections cumulables*</strong></span>
+                  </li>
+                </ul>
+              </div>
+
+              <div className="pt-6">
+                <button
+                  type="button"
+                  onClick={() => onOpenPaywall && onOpenPaywall('monthly')}
+                  className="w-full py-3 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs sm:text-sm transition-all shadow-xs flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <span>Choisir cette formule</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* PLAN 2: TRIMESTRIEL (3 MOIS) - MEILLEUR ÉQUILIBRE */}
+            <div className="bg-white rounded-3xl border border-slate-200 p-6 sm:p-7 flex flex-col justify-between hover:shadow-md transition-all shadow-sm relative">
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="text-xs font-bold text-blue-700 uppercase tracking-wider block">
+                      Trimestriel
+                    </span>
+                    <h3 className="text-xl font-extrabold text-slate-900 mt-0.5">3 mois</h3>
+                  </div>
+                  <span className="px-2.5 py-1 rounded-full text-[10px] font-black bg-blue-100 text-blue-800">
+                    ⭐ Meilleur équilibre
+                  </span>
+                </div>
+
+                {/* Price in EUR first, then FCFA below */}
+                <div className="py-3 border-y border-slate-100 space-y-1">
+                  <div className="flex items-baseline gap-1.5">
+                    <span className="text-3xl sm:text-4xl font-black text-slate-900 font-mono">
+                      18,30 €
+                    </span>
+                    <span className="text-xs font-semibold text-slate-500">pour 3 mois</span>
+                  </div>
+                  <div className="text-xs font-semibold text-slate-600 flex items-center gap-1.5">
+                    <span>Soit</span>
+                    <strong className="text-slate-900 font-mono">12 000 FCFA</strong>
+                    <span className="text-slate-400 line-through">15 000 FCFA</span>
+                  </div>
+                  <div className="text-[11px] font-bold text-emerald-700 pt-0.5">
+                    Économisez 3 000 FCFA (4,50 €)
+                  </div>
+                </div>
+
+                {/* Highlighted Corrections count underneath price */}
+                <div className="bg-blue-50/70 border border-blue-200/80 rounded-2xl p-3 text-center">
+                  <span className="text-2xl font-black text-blue-900 font-mono block">1 500</span>
+                  <span className="text-xs font-bold text-blue-700">corrections</span>
+                  <span className="text-[10px] text-blue-600 block mt-0.5">500 corrections × 3 mois</span>
+                </div>
+
+                <ul className="text-xs text-slate-600 space-y-2.5 pt-1">
+                  <li className="flex items-start gap-2 font-semibold text-slate-900">
+                    <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                    <span>Tout le contenu du mensuel</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                    <span>500 corrections × 3 mois</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                    <span><strong>Corrections restantes conservées*</strong></span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                    <span>Aucun paiement mensuel pendant 3 mois</span>
+                  </li>
+                </ul>
+              </div>
+
+              <div className="pt-6">
+                <button
+                  type="button"
+                  onClick={() => onOpenPaywall && onOpenPaywall('quarterly')}
+                  className="w-full py-3 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs sm:text-sm transition-all shadow-xs flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <span>Choisir 3 mois</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* PLAN 3: PASS ANNÉE SCOLAIRE (9 MOIS) - CARTE VISUELLEMENT DOMINANTE */}
+            <div className="bg-gradient-to-b from-blue-900 via-indigo-950 to-slate-950 text-white rounded-3xl p-6 sm:p-7 flex flex-col justify-between shadow-2xl relative scale-100 md:scale-105 z-10 border-2 border-amber-400">
+              <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 px-3.5 py-1 rounded-full text-[11px] font-black uppercase tracking-wider bg-amber-400 text-slate-950 shadow-md whitespace-nowrap">
+                🎓 Pour toute l'année scolaire
+              </div>
+
+              <div className="space-y-4 pt-2">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="text-xs font-bold text-amber-300 uppercase tracking-wider block">
+                      Formule Recommandée
+                    </span>
+                    <h3 className="text-xl font-black text-white mt-0.5">Année scolaire</h3>
+                  </div>
+                  <span className="text-[10px] font-extrabold text-amber-300 bg-amber-400/20 px-2 py-0.5 rounded-full border border-amber-300/30">
+                    Top Valeur
+                  </span>
+                </div>
+
+                {/* Price in EUR first, then FCFA below */}
+                <div className="py-3 border-y border-white/15 space-y-1">
+                  <div className="flex items-baseline gap-1.5">
+                    <span className="text-3xl sm:text-4xl font-black text-white font-mono">
+                      45,75 €
+                    </span>
+                    <span className="text-xs font-semibold text-slate-300">pour 9 mois</span>
+                  </div>
+                  <div className="text-xs font-semibold text-blue-200 flex items-center gap-1.5">
+                    <span>Soit</span>
+                    <strong className="text-white font-mono">30 000 FCFA</strong>
+                    <span className="text-slate-400 line-through">45 000 FCFA</span>
+                  </div>
+                  <div className="text-[11px] font-black text-amber-300 pt-0.5">
+                    Économisez 15 000 FCFA (22,85 €)
+                  </div>
+                </div>
+
+                {/* Highlighted Corrections count underneath price */}
+                <div className="bg-white/10 border border-white/20 rounded-2xl p-3.5 text-center backdrop-blur-xs">
+                  <span className="text-3xl font-black text-amber-300 font-mono block">4 500</span>
+                  <span className="text-xs font-bold text-white">corrections</span>
+                  <span className="text-[10px] text-blue-200 block mt-0.5">500 corrections × 9 mois</span>
+                </div>
+
+                <ul className="text-xs text-slate-200 space-y-2.5 pt-1">
+                  <li className="flex items-start gap-2 font-semibold text-white">
+                    <CheckCircle2 className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                    <span>Tout le contenu du mensuel</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <Check className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                    <span>500 corrections × 9 mois</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <Check className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                    <span><strong>Pensé pour toute l'année scolaire</strong></span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <Check className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                    <span>Corrections restantes conservées*</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <Check className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                    <span>Paiement unique, tranquillité totale</span>
+                  </li>
+                </ul>
+              </div>
+
+              <div className="pt-6">
+                <button
+                  type="button"
+                  onClick={() => onOpenPaywall && onOpenPaywall('school_year')}
+                  className="w-full py-3.5 px-4 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs sm:text-sm transition-all shadow-lg flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <span>Choisir l'année scolaire</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Séries Supplémentaires (EXTRA) - Pas d'expiration */}
+          <div className="bg-slate-50 border border-slate-200 rounded-3xl p-6 sm:p-8 space-y-4">
+            <div className="space-y-1">
+              <h3 className="text-xl font-black text-slate-900">
+                Besoin de plus de corrections ?
+              </h3>
+              <p className="text-xs sm:text-sm text-slate-600">
+                Pas besoin de changer de formule. <strong>Ajoutez simplement des corrections quand vous en avez besoin.</strong>
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+              <div className="bg-white p-3.5 rounded-2xl border border-slate-200 flex flex-col justify-between gap-2">
+                <div>
+                  <span className="font-extrabold text-slate-900 text-sm block">+100 corrections</span>
+                  <span className="text-xs font-mono font-bold text-slate-700">1,50 € <span className="text-slate-500 font-normal">(1 000 FCFA)</span></span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onOpenPaywall && onOpenPaywall('extra_100')}
+                  className="w-full py-1.5 rounded-xl bg-slate-900 text-white font-bold text-xs hover:bg-slate-800 transition-colors"
+                >
+                  Ajouter
+                </button>
+              </div>
+
+              <div className="bg-white p-3.5 rounded-2xl border-2 border-blue-500 shadow-sm flex flex-col justify-between gap-2 relative">
+                <span className="absolute -top-2.5 right-3 px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-blue-600 text-white">Populaire</span>
+                <div>
+                  <span className="font-extrabold text-blue-900 text-sm block">+200 corrections</span>
+                  <span className="text-xs font-mono font-bold text-blue-700">3,05 € <span className="text-slate-500 font-normal">(2 000 FCFA)</span></span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onOpenPaywall && onOpenPaywall('extra_200')}
+                  className="w-full py-1.5 rounded-xl bg-blue-600 text-white font-bold text-xs hover:bg-blue-700 transition-colors"
+                >
+                  Ajouter
+                </button>
+              </div>
+
+              <div className="bg-white p-3.5 rounded-2xl border border-slate-200 flex flex-col justify-between gap-2">
+                <div>
+                  <span className="font-extrabold text-slate-900 text-sm block">+300 corrections</span>
+                  <span className="text-xs font-mono font-bold text-slate-700">4,55 € <span className="text-slate-500 font-normal">(3 000 FCFA)</span></span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onOpenPaywall && onOpenPaywall('extra_300')}
+                  className="w-full py-1.5 rounded-xl bg-slate-900 text-white font-bold text-xs hover:bg-slate-800 transition-colors"
+                >
+                  Ajouter
+                </button>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-500 italic">
+              Les corrections supplémentaires achetées sont conservées sur votre compte.
+            </p>
+          </div>
+
+          {/* Une règle simple (Cumul & Report) */}
+          <div className="p-6 rounded-3xl bg-blue-50/70 border border-blue-200 space-y-3">
+            <h4 className="text-base font-black text-slate-900">
+              Une règle simple : vos corrections ne disparaissent pas à la fin du mois
+            </h4>
+            <p className="text-xs text-slate-600">
+              Si vous avez 70 corrections restantes et que votre abonnement se renouvelle :
+            </p>
+            <div className="p-3 rounded-xl bg-white border border-blue-100 font-mono text-xs sm:text-sm font-bold text-blue-950 text-center">
+              70 restantes + 500 nouvelles = <span className="text-emerald-600">570 corrections disponibles.</span>
+            </div>
+            <p className="text-[11px] text-slate-500">
+              *Les corrections incluses dans l'abonnement sont cumulables dans la limite définie par Praxis (1 500 corrections max). Les corrections supplémentaires achetées séparément sont conservées selon les conditions du service.
+            </p>
+          </div>
+
+          {/* Payment Badges & Reassurance Ribbon */}
+          <div className="p-5 sm:p-6 rounded-2xl bg-slate-100/80 border border-slate-200 flex flex-col md:flex-row items-center justify-between gap-4 text-xs">
+            <div className="flex flex-wrap items-center gap-4 sm:gap-6 justify-center md:justify-start">
+              <div className="flex items-center gap-2 font-bold text-slate-800">
+                <span className="w-8 h-8 rounded-lg bg-[#00D2FF] text-white flex items-center justify-center font-black text-xs shadow-xs">
+                  🌊
+                </span>
+                <span>Wave Mobile Money CI & Sénégal (0% frais)</span>
+              </div>
+              <div className="flex items-center gap-2 font-bold text-slate-800">
+                <div className="w-8 h-8 rounded-lg bg-slate-900 text-white flex items-center justify-center shadow-xs">
+                  <CreditCard className="w-4 h-4" />
+                </div>
+                <span>Carte Bancaire (Visa / Mastercard / Ecobank / UBA...)</span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 text-slate-500 font-medium">
+              <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span>Facture émise · Activation immédiate des copies</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 8. CONTACT & ASSISTANCE SECTION */}
+      <section id="section-contact" className="py-14 sm:py-20 bg-slate-50 border-t border-slate-200">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 space-y-10">
+          <div className="text-center max-w-2xl mx-auto space-y-3">
+            <span className="text-xs font-bold uppercase tracking-wider text-emerald-700 bg-emerald-100 px-3 py-1 rounded-full border border-emerald-200">
+              Support & Démonstration
+            </span>
+            <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
+              Une question ou besoin d'un accompagnement ?
+            </h2>
+            <p className="text-sm sm:text-base text-slate-600 leading-relaxed">
+              Que vous soyez enseignant individuel, responsable pédagogique ou chef d'établissement, nous sommes à votre disposition pour vous aider à déployer Praxis IA.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Contact Card: Phone & WhatsApp */}
+            <div className="bg-white p-6 sm:p-7 rounded-2xl border border-slate-200 shadow-xs hover:border-slate-300 transition-all flex flex-col justify-between space-y-6">
+              <div className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                    <Phone className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">
+                      Téléphone & WhatsApp Direct
+                    </span>
+                    <h3 className="text-xl font-extrabold text-slate-900 font-mono">
+                      +225 0103890314
+                    </h3>
+                  </div>
+                </div>
+                <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+                  Échangez directement avec notre équipe technique et pédagogique par message WhatsApp ou par appel téléphonique.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2.5 pt-2">
+                <a
+                  href="https://wa.me/2250103890314?text=Bonjour%20je%20vous%20contacte%20concernant%20Praxis%20IA"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition-colors shadow-xs"
+                >
+                  <MessageCircle className="w-4 h-4" />
+                  <span>WhatsApp</span>
+                </a>
+                <a
+                  href="tel:+2250103890314"
+                  className="flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs transition-colors shadow-xs"
+                >
+                  <Phone className="w-4 h-4" />
+                  <span>Appeler</span>
+                </a>
+              </div>
+            </div>
+
+            {/* Contact Card: Email */}
+            <div className="bg-white p-6 sm:p-7 rounded-2xl border border-slate-200 shadow-xs hover:border-slate-300 transition-all flex flex-col justify-between space-y-6">
+              <div className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center shrink-0">
+                    <Mail className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">
+                      Contact Par E-mail
+                    </span>
+                    <h3 className="text-lg sm:text-xl font-extrabold text-slate-900 font-mono break-all">
+                      agoussoukevin@gmail.com
+                    </h3>
+                  </div>
+                </div>
+                <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+                  Envoyez-nous vos demandes de démonstration, devis pour établissement scolaire ou suggestions d'amélioration.
+                </p>
+              </div>
+
+              <div className="pt-2">
+                <a
+                  href="mailto:agoussoukevin@gmail.com?subject=Demande%20d%27information%20Praxis%20IA"
+                  className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs transition-colors shadow-xs"
+                >
+                  <Mail className="w-4 h-4" />
+                  <span>Envoyer un message par e-mail</span>
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 9. FINAL CALL TO ACTION BANNER */}
+      <section className="py-14 sm:py-20 bg-gradient-to-r from-blue-700 via-indigo-700 to-blue-800 text-white">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 text-center space-y-6">
+          <h2 className="text-2xl sm:text-4xl font-extrabold tracking-tight">
+            Prêt à transformer vos séances de correction ?
+          </h2>
+          <p className="text-base sm:text-lg text-blue-100 max-w-2xl mx-auto font-normal leading-relaxed">
+            Rejoignez les enseignants qui corrigent plus vite et mieux. Déposez vos premières copies manuscrites dès maintenant.
+          </p>
+          <div className="pt-2">
+            <button
+              type="button"
+              onClick={onStartCorrection}
+              className="inline-flex items-center justify-center gap-2.5 px-8 py-4 rounded-xl bg-white hover:bg-slate-100 text-blue-900 font-bold text-base shadow-xl hover:-translate-y-0.5 transition-all cursor-pointer"
+            >
+              <Sparkles className="w-5 h-5 text-blue-600" />
+              <span>Commencer à corriger mes copies</span>
+              <ArrowRight className="w-4 h-4 text-blue-700" />
+            </button>
+          </div>
+        </div>
+      </section>
+
+      {/* 10. FOOTER WITH CONTACT INFORMATION */}
+      <footer className="bg-white border-t border-slate-200 py-12 text-xs text-slate-500">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 space-y-8">
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 pb-6 border-b border-slate-100">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 font-bold text-slate-800 text-base">
+                <span className="w-7 h-7 rounded-lg bg-blue-600 text-white flex items-center justify-center text-xs">
+                  P
+                </span>
+                <span>PRAXIS</span>
+                <span className="text-slate-400 font-normal text-xs">· Évaluation Pédagogique Intelligente</span>
+              </div>
+              <p className="text-slate-500 text-xs max-w-md">
+                Copilote d'évaluation manuscrite pour professeurs de collèges, lycées et supérieur.
+              </p>
+            </div>
+
+            {/* Direct Contact Badges in Footer */}
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 text-xs">
+              <a
+                href="tel:+2250103890314"
+                className="flex items-center gap-2 text-slate-700 hover:text-emerald-700 transition-colors font-medium"
+                title="Appeler le support"
+              >
+                <div className="w-6 h-6 rounded-md bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                  <Phone className="w-3.5 h-3.5" />
+                </div>
+                <span>+225 0103890314</span>
+              </a>
+
+              <a
+                href="mailto:agoussoukevin@gmail.com"
+                className="flex items-center gap-2 text-slate-700 hover:text-blue-700 transition-colors font-medium"
+                title="Envoyer un e-mail"
+              >
+                <div className="w-6 h-6 rounded-md bg-blue-50 text-blue-600 flex items-center justify-center">
+                  <Mail className="w-3.5 h-3.5" />
+                </div>
+                <span>agoussoukevin@gmail.com</span>
+              </a>
+
+              {onOpenContact && (
+                <button
+                  type="button"
+                  onClick={onOpenContact}
+                  className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold transition-colors cursor-pointer"
+                >
+                  Nous contacter
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500">
+            <div className="flex flex-wrap items-center gap-4">
+              <button
+                type="button"
+                onClick={onStartCorrection}
+                className="hover:text-blue-600 transition-colors cursor-pointer"
+              >
+                Correction
+              </button>
+              <button
+                type="button"
+                onClick={() => onNavigateToView('classes')}
+                className="hover:text-blue-600 transition-colors cursor-pointer"
+              >
+                Classes
+              </button>
+              <button
+                type="button"
+                onClick={() => onNavigateToView('suivi')}
+                className="hover:text-blue-600 transition-colors cursor-pointer"
+              >
+                Suivi
+              </button>
+              <button
+                type="button"
+                onClick={() => onNavigateToView('faq')}
+                className="hover:text-blue-600 transition-colors cursor-pointer"
+              >
+                FAQ
+              </button>
+              <button
+                type="button"
+                onClick={() => onNavigateToView('affiliate')}
+                className="text-blue-600 hover:text-blue-700 font-bold transition-colors cursor-pointer"
+              >
+                Programme Affilié (20% - 25%)
+              </button>
+              {onOpenContact && (
+                <button
+                  type="button"
+                  onClick={onOpenContact}
+                  className="hover:text-blue-600 transition-colors cursor-pointer font-semibold text-slate-700"
+                >
+                  Contact & Support
+                </button>
+              )}
+            </div>
+
+            <div className="flex items-center gap-3 text-[11px] text-slate-400">
+              <span>Hébergement sécurisé France & UE</span>
+              <span>·</span>
+              <span>Conforme RGPD</span>
+            </div>
+          </div>
+        </div>
+      </footer>
+    </div>
+  );
+};
