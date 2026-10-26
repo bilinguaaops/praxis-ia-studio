@@ -292,6 +292,29 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
                 <span>Parrainage (+50)</span>
               </button>
 
+              {(currentLead?.role === 'affiliate' ||
+                currentLead?.role === 'ambassadeur' ||
+                currentLead?.role === 'partner' ||
+                currentLead?.isAffiliate ||
+                Boolean(currentLead?.affiliateCode) ||
+                sessionStorage.getItem('praxis_affiliate_authorized') === 'true' ||
+                Boolean(localStorage.getItem('praxis_affiliate_code'))) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onViewChange('affiliate');
+                    setIsProfileOpen(false);
+                  }}
+                  className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-blue-600 dark:text-blue-400 font-semibold hover:bg-blue-50 dark:hover:bg-blue-950/40 text-left transition-colors cursor-pointer"
+                >
+                  <div className="flex items-center gap-2">
+                    <ShieldCheck className="w-3.5 h-3.5" />
+                    <span>Espace Ambassadeur</span>
+                  </div>
+                  <span className="text-[10px] bg-blue-100 dark:bg-blue-900/60 px-1.5 py-0.5 rounded font-bold">20%</span>
+                </button>
+              )}
+
               <div className="h-px bg-slate-100 dark:bg-slate-800 my-1" />
 
               <button

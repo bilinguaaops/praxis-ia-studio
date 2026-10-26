@@ -227,6 +227,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
           throw new Error(data.error || 'Erreur lors de l’inscription.');
         }
 
+        const isAff = Boolean(data.lead.isAffiliate || data.lead.role === 'affiliate');
         const lead: LeadData = {
           name: data.lead.name,
           email: data.lead.email,
@@ -239,8 +240,17 @@ export const AuthView: React.FC<AuthViewProps> = ({
           extraCredits: data.lead.extraCredits || 0,
           copiesCorrected: data.lead.copiesCorrected || 0,
           userId: data.lead.id,
-          role: 'teacher',
+          role: data.lead.role || (isAff ? 'affiliate' : 'teacher'),
+          affiliateCode: data.lead.affiliateCode || '',
+          isAffiliate: isAff,
         };
+
+        if (data.lead.affiliateCode || isAff) {
+          try {
+            if (data.lead.affiliateCode) localStorage.setItem('praxis_affiliate_code', data.lead.affiliateCode);
+            sessionStorage.setItem('praxis_affiliate_authorized', 'true');
+          } catch {}
+        }
 
         localStorage.setItem('praxis_lead', JSON.stringify(lead));
         localStorage.setItem('cpro_lead', JSON.stringify(lead));
@@ -423,10 +433,11 @@ export const AuthView: React.FC<AuthViewProps> = ({
           isAffiliate: Boolean(data.isAffiliate),
         };
 
-        if (data.affiliateCode) {
+        if (data.affiliateCode || data.isAffiliate || data.role === 'affiliate') {
           try {
-            localStorage.setItem('praxis_affiliate_code', data.affiliateCode);
+            if (data.affiliateCode) localStorage.setItem('praxis_affiliate_code', data.affiliateCode);
             sessionStorage.setItem('praxis_affiliate_authorized', 'true');
+            localStorage.setItem('praxis_affiliate_authorized', 'true');
           } catch {}
         }
 

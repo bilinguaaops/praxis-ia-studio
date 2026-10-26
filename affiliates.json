@@ -1,7 +1,52 @@
 {
-  "affiliates": [],
+  "affiliates": [
+    {
+      "id": 1,
+      "name": "Extraframe Pro",
+      "affiliateName": "Extraframe Pro",
+      "email": "extraframe.pro@gmail.com",
+      "phone": "+2250700000000",
+      "code": "EXTRAFRAME2026",
+      "affiliateCode": "EXTRAFRAME2026",
+      "inviteToken": "inv_extraframe_2026",
+      "joinDate": "2026-10-26",
+      "status": "Actif",
+      "contractStatus": "Signé",
+      "contractExpiry": "2027-10-26",
+      "contractUrl": "#contrat-affilie-praxis",
+      "totalClientsGenerated": 0,
+      "totalCommissionAccumulated": 0,
+      "totalCommissionEarned": 0,
+      "totalCommissionPaid": 0,
+      "commissionDue": 0,
+      "pendingBalance": 0,
+      "commissionRate": 20,
+      "conversionRate": 0.35,
+      "palierReached": false,
+      "clientsUntilPalier": 20,
+      "lastPaymentDate": "",
+      "lastPaymentAmount": 0,
+      "nextPaymentDate": "2026-11-26",
+      "clients": [],
+      "paymentHistory": [],
+      "bonus": {
+        "code": "EXTRAFRAME2026",
+        "bonusPerClient": "+100 corrections",
+        "conversion": 0,
+        "totalBonusValue": 0
+      },
+      "calendar": []
+    }
+  ],
   "payoutRequests": [],
   "actionLogs": [
+    {
+      "id": "log_extraframe_init",
+      "date": "2026-10-26T00:00:00.000Z",
+      "action": "Création affilié",
+      "affiliateName": "Extraframe Pro",
+      "details": "Création du compte affilié pour Extraframe Pro (Code: EXTRAFRAME2026, Taux: 20%). Compte utilisateur et code promo activés."
+    },
     {
       "id": "log_mvnx7ito",
       "date": "2026-10-25T14:26:02.892Z",
@@ -18,6 +63,8 @@
     }
   ],
   "applications": [],
-  "authorizedEmails": [],
+  "authorizedEmails": [
+    "extraframe.pro@gmail.com"
+  ],
   "inviteLinks": []
 }

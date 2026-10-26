@@ -79,8 +79,8 @@ export const AffiliateDashboard: React.FC<AffiliateDashboardProps> = ({
   const [isContractModalOpen, setIsContractModalOpen] = useState<boolean>(false);
   const [isSupportModalOpen, setIsSupportModalOpen] = useState<boolean>(false);
 
-  // Formulaire de retrait (Payout)
-  const [payoutAmount, setPayoutAmount] = useState<number>(100000);
+  // Formulaire de retrait (Payout - aucun seuil minimum requis)
+  const [payoutAmount, setPayoutAmount] = useState<number>(0);
   const [payoutMethod, setPayoutMethod] = useState<'Wave' | 'Orange Money' | 'Moov Money' | 'Virement Bancaire'>('Wave');
   const [payoutPhoneOrIban, setPayoutPhoneOrIban] = useState<string>('+225 07 48 92 11 30');
   const [payoutNotes, setPayoutNotes] = useState<string>('');
@@ -276,7 +276,7 @@ export const AffiliateDashboard: React.FC<AffiliateDashboardProps> = ({
       localStorage.setItem('praxis_affiliate_code', code);
       sessionStorage.setItem('praxis_affiliate_authorized', 'true');
       if (result.data?.pendingBalance) {
-        setPayoutAmount(Math.max(100000, Math.min(result.data.pendingBalance, 100000)));
+        setPayoutAmount(result.data.pendingBalance);
       }
     } catch (err: any) {
       console.error('[AffiliateDashboard] Erreur chargement :', err);
@@ -585,11 +585,11 @@ export const AffiliateDashboard: React.FC<AffiliateDashboardProps> = ({
     },
     {
       q: 'Quand et comment serai-je payé ?',
-      a: 'Les versements s’effectuent de façon hebdomadaire dès que votre solde de commissions accumulé atteint le seuil minimum de 100 000 FCFA. Vous recevez vos fonds directement sur votre compte Wave, Orange Money, Moov Money ou par virement bancaire.',
+      a: 'Les versements s’effectuent sous 24h à 48h ouvrées dès votre demande. Vous recevez vos fonds directement sur votre compte Wave, Orange Money, Moov Money ou par virement bancaire.',
     },
     {
       q: 'Puis-je demander un versement immédiat ?',
-      a: 'Oui ! Dès que votre solde disponible atteint ou dépasse 100 000 FCFA, vous pouvez cliquer à tout moment sur le bouton « Demander un versement » pour déclencher un paiement sous 24h à 48h ouvrées.',
+      a: 'Oui ! Vous pouvez demander le retrait de vos commissions à tout moment, quel que soit le montant (aucun seuil minimum imposé). Cliquez simplement sur « Demander un versement » dès que vous avez un solde.',
     },
     {
       q: 'Comment partager mon code et maximiser mes conversions ?',
@@ -983,8 +983,8 @@ export const AffiliateDashboard: React.FC<AffiliateDashboardProps> = ({
     );
   }
 
-  const isEligibleForPayout = data.pendingBalance >= 100000;
-  const missingForPayout = Math.max(0, 100000 - data.pendingBalance);
+  const isEligibleForPayout = (data.pendingBalance ?? 0) > 0;
+  const missingForPayout = 0;
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8 animate-in fade-in duration-300">
@@ -1174,11 +1174,11 @@ export const AffiliateDashboard: React.FC<AffiliateDashboardProps> = ({
           </div>
           <div className="space-y-1">
             <div className="text-3xl font-black text-emerald-600 dark:text-emerald-400 tabular-nums">
-              {data.totalCommissionAccumulated.toLocaleString('fr-FR')}{' '}
+              {(data.totalCommissionAccumulated ?? 0).toLocaleString('fr-FR')}{' '}
               <span className="text-sm font-bold text-slate-500">FCFA</span>
             </div>
             <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
-              Solde disponible : <strong className="text-slate-800 dark:text-slate-200">{data.pendingBalance.toLocaleString('fr-FR')} FCFA</strong>
+              Solde disponible : <strong className="text-slate-800 dark:text-slate-200">{(data.pendingBalance ?? 0).toLocaleString('fr-FR')} FCFA</strong>
             </p>
           </div>
         </div>
@@ -1195,12 +1195,12 @@ export const AffiliateDashboard: React.FC<AffiliateDashboardProps> = ({
           </div>
           <div className="space-y-1">
             <div className="text-3xl font-black text-slate-900 dark:text-white tabular-nums">
-              {data.lastPaymentAmount.toLocaleString('fr-FR')}{' '}
+              {(data.lastPaymentAmount ?? 0).toLocaleString('fr-FR')}{' '}
               <span className="text-sm font-bold text-slate-500">FCFA</span>
             </div>
             <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 flex items-center gap-1">
               <Clock className="w-3.5 h-3.5 text-slate-400" />
-              <span>Versé le {new Date(data.lastPaymentDate).toLocaleDateString('fr-FR')}</span>
+              <span>{data.lastPaymentDate ? `Versé le ${new Date(data.lastPaymentDate).toLocaleDateString('fr-FR')}` : 'Aucun versement antérieur'}</span>
             </p>
           </div>
         </div>
@@ -1215,14 +1215,16 @@ export const AffiliateDashboard: React.FC<AffiliateDashboardProps> = ({
               <Calendar className="w-5 h-5 text-blue-200" />
             </div>
             <div className="text-2xl font-black tabular-nums">
-              {new Date(data.nextPaymentDate).toLocaleDateString('fr-FR', {
-                day: 'numeric',
-                month: 'long',
-                year: 'numeric',
-              })}
+              {data.nextPaymentDate && !isNaN(new Date(data.nextPaymentDate).getTime())
+                ? new Date(data.nextPaymentDate).toLocaleDateString('fr-FR', {
+                    day: 'numeric',
+                    month: 'long',
+                    year: 'numeric',
+                  })
+                : 'Sur demande'}
             </div>
             <p className="text-[11px] text-blue-100 mt-1">
-              {isEligibleForPayout ? '🎉 Seuil 100K atteint !' : `Encore ${missingForPayout.toLocaleString('fr-FR')} F pour le seuil`}
+              {isEligibleForPayout ? '✓ Solde disponible pour versement immédiat' : 'Aucun versement en attente'}
             </p>
           </div>
 
@@ -1337,10 +1339,10 @@ export const AffiliateDashboard: React.FC<AffiliateDashboardProps> = ({
               <span>Avantage Exclusif de Parrainage</span>
             </div>
             <h3 className="text-xl sm:text-2xl font-black">
-              Bonus Offert à Vos Filleuls : {data.bonus.bonusPerClient}
+              Bonus Offert à Vos Filleuls : {data.bonus?.bonusPerClient || '+100 corrections'}
             </h3>
             <p className="text-xs sm:text-sm text-blue-100/90 leading-relaxed">
-              Pour chaque enseignant ou école qui utilise votre code <code className="bg-white/20 px-2 py-0.5 rounded font-mono font-bold text-white">{data.bonus.code}</code>, Praxis leur offre gracieusement 100 corrections supplémentaires. Un argument puissant pour conclure vos recommandations !
+              Pour chaque enseignant ou école qui utilise votre code <code className="bg-white/20 px-2 py-0.5 rounded font-mono font-bold text-white">{data.bonus?.code || data.affiliateCode || activeCode || 'CODE'}</code>, Praxis leur offre gracieusement 100 corrections supplémentaires. Un argument puissant pour conclure vos recommandations !
             </p>
           </div>
 
@@ -1350,10 +1352,10 @@ export const AffiliateDashboard: React.FC<AffiliateDashboardProps> = ({
               Bonus Activés
             </span>
             <div className="text-3xl font-black text-amber-300">
-              {data.bonus.conversion} <span className="text-sm font-semibold text-white">écoles / profs</span>
+              {data.bonus?.conversion ?? 0} <span className="text-sm font-semibold text-white">écoles / profs</span>
             </div>
             <p className="text-[11px] text-blue-200">
-              Valeur équivalente offerte : {data.bonus.totalBonusValue.toLocaleString('fr-FR')} FCFA
+              Valeur équivalente offerte : {((data.bonus?.totalBonusValue ?? ((data.bonus?.conversion ?? 0) * 1000))).toLocaleString('fr-FR')} FCFA
             </p>
           </div>
         </div>
@@ -1520,7 +1522,7 @@ export const AffiliateDashboard: React.FC<AffiliateDashboardProps> = ({
               <span>Calendrier des Versements Hebdomadaires</span>
             </h2>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              Cycle de versement chaque semaine : le virement est déclenché dès que le seuil de 100 000 FCFA est atteint.
+              Cycle de versement flexible : effectuez une demande de versement à tout moment, sans aucun seuil minimum requis.
             </p>
           </div>
 
@@ -1631,7 +1633,7 @@ export const AffiliateDashboard: React.FC<AffiliateDashboardProps> = ({
                   <h3 className="font-bold text-sm text-slate-900 dark:text-white">
                     Demander un Versement
                   </h3>
-                  <p className="text-[11px] text-slate-500">Seuil minimum : 100 000 FCFA</p>
+                  <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">Aucun seuil minimum requis</p>
                 </div>
               </div>
               <button
@@ -1672,9 +1674,9 @@ export const AffiliateDashboard: React.FC<AffiliateDashboardProps> = ({
                   <div className="relative">
                     <input
                       type="number"
-                      min={100000}
-                      max={data.pendingBalance}
-                      step={5000}
+                      min={1}
+                      max={data.pendingBalance || 0}
+                      step={500}
                       value={payoutAmount}
                       onChange={(e) => setPayoutAmount(parseInt(e.target.value, 10) || 0)}
                       className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-900 dark:text-white outline-hidden"
@@ -1764,10 +1766,10 @@ export const AffiliateDashboard: React.FC<AffiliateDashboardProps> = ({
                 </div>
                 <div className="space-y-1">
                   <h4 className="font-bold text-sm text-slate-900 dark:text-white">
-                    Seuil de 100 000 FCFA non atteint
+                    Aucun solde disponible pour le moment
                   </h4>
                   <p className="text-xs text-slate-600 dark:text-slate-400 max-w-xs mx-auto leading-relaxed">
-                    Vous avez actuellement <strong>{data.pendingBalance.toLocaleString('fr-FR')} FCFA</strong>. Il vous manque <strong>{missingForPayout.toLocaleString('fr-FR')} FCFA</strong> pour pouvoir débloquer un virement.
+                    Votre solde actuel est de <strong>{(data.pendingBalance ?? 0).toLocaleString('fr-FR')} FCFA</strong>. Dès que vous générez une vente avec votre code promo, vous pouvez demander le retrait immédiat de n'importe quel montant (aucun seuil minimum requis).
                   </p>
                 </div>
 
@@ -1816,8 +1818,8 @@ export const AffiliateDashboard: React.FC<AffiliateDashboardProps> = ({
               </div>
 
               <div className="p-3 bg-slate-50 dark:bg-slate-800 rounded-xl space-y-1">
-                <span className="font-bold text-slate-900 dark:text-white block">2. Seuil de versement et Délais</span>
-                <p>Le seuil minimum de versement est fixé à 100 000 FCFA. Les versements sont effectués sous 24 à 48 heures ouvrées après demande via Wave, Orange Money ou virement bancaire.</p>
+                <span className="font-bold text-slate-900 dark:text-white block">2. Versements et Délais</span>
+                <p>Aucun seuil minimum de versement n'est imposé : vous pouvez demander le versement de vos commissions à tout moment, quel que soit le montant de votre solde disponible. Les versements sont traités sous 24 à 48 heures ouvrées via Wave, Orange Money ou virement bancaire.</p>
               </div>
 
               <div className="p-3 bg-slate-50 dark:bg-slate-800 rounded-xl space-y-1">

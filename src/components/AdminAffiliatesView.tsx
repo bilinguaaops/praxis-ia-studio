@@ -1552,7 +1552,7 @@ export const AdminAffiliatesView: React.FC<AdminAffiliatesViewProps> = ({ onNoti
               Politique de versement des commissions :
             </span>
             <p className="text-[11px] text-blue-300/80 leading-relaxed">
-              Le seuil minimum de versement recommandé est de 100 000 FCFA. Les commissions sont payées par Wave, Orange Money ou virement avec traçabilité intégrale.
+              Aucun seuil minimum de versement n'est imposé : les partenaires peuvent demander le virement de leurs commissions à tout moment, quel que soit le montant disponible. Les commissions sont payées sous 24h à 48h par Wave, Orange Money ou virement avec traçabilité intégrale.
             </p>
           </div>
         </div>
@@ -2719,7 +2719,7 @@ export const AdminAffiliatesView: React.FC<AdminAffiliatesViewProps> = ({ onNoti
                 <strong>Article 2 — Rémunération :</strong> Le taux de commission standard est fixé à <strong>{contractAffiliate.commissionRate || 20}%</strong> sur chaque encaissement net hors taxes généré via le code promo <code>{contractAffiliate.code || contractAffiliate.affiliateCode}</code>. À compter du 20ème client actif, le taux passe à 25% VIP.
               </p>
               <p>
-                <strong>Article 3 — Modalités de Paiement :</strong> Les versements sont effectués de façon hebdomadaire ou mensuelle sur demande, dès que le solde accumulé atteint le seuil minimum de 100 000 FCFA, via Wave, Orange Money ou Virement Bancaire.
+                <strong>Article 3 — Modalités de Paiement :</strong> Les versements sont effectués sur demande de l'affilié à tout moment, sans aucun seuil minimum de versement, via Wave, Orange Money ou Virement Bancaire dans un délai de 24h à 48h ouvrées.
               </p>
               <p className="text-emerald-400 font-semibold">
                 ✓ Statut contractuel : {contractAffiliate.contractStatus || 'Signé numériquement'} • Validité jusqu'au {contractAffiliate.contractExpiry || '2027-06-14'}.

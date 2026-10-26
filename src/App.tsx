@@ -280,13 +280,18 @@ export default function App() {
               localStorage.setItem('praxis_affiliate_code', affCode);
               sessionStorage.setItem('praxis_affiliate_authorized', 'true');
             } catch {}
-            if (currentLead.role !== 'affiliate' || !currentLead.affiliateCode) {
-              setLocalLead((prev) => ({
-                ...(prev || currentLead),
-                role: 'affiliate',
-                affiliateCode: affCode,
-                isAffiliate: true,
-              }));
+            if (currentLead.role !== 'affiliate' || !currentLead.affiliateCode || !currentLead.isAffiliate) {
+              setLocalLead((prev) => {
+                const updated = {
+                  ...(prev || currentLead),
+                  role: 'affiliate' as const,
+                  affiliateCode: affCode,
+                  isAffiliate: true,
+                };
+                localStorage.setItem('praxis_lead', JSON.stringify(updated));
+                localStorage.setItem('cpro_lead', JSON.stringify(updated));
+                return updated;
+              });
             }
           }
         })

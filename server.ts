@@ -159,58 +159,93 @@ export const PROMO_CODES_REGISTRY: Record<string, PromoCodeConfig> = {
   },
   PROFJEAN: {
     code: 'PROFJEAN',
-    discountPercent: 30,
-    firstMonthOnly: true,
+    discountPercent: 0,
+    firstMonthOnly: false,
+    bonusCredits: {
+      starter: 100,
+      monthly: 100,
+      quarterly: 100,
+      school_year: 100,
+      default: 100,
+    },
     partnerId: 'partner_jean',
     partnerName: 'Professeur Jean',
     partnerCommissionPercent: 20,
     active: true,
-    allowedPlans: ['monthly', 'quarterly', 'school_year'],
-    description: 'Code promo partenaire -30% sur le premier mois',
+    allowedPlans: ['starter', 'monthly', 'quarterly', 'school_year', 'extra_100', 'extra_200', 'extra_300', 'extra_500', 'extra_1000', 'school_small', 'school_medium', 'school_large', 'school_xl', 'school_annual'],
+    description: 'Code partenaire Professeur Jean (+100 copies supplémentaires offertes)',
   },
   BIENVENUE30: {
     code: 'BIENVENUE30',
-    discountPercent: 30,
-    firstMonthOnly: true,
+    discountPercent: 0,
+    firstMonthOnly: false,
+    bonusCredits: {
+      starter: 100,
+      monthly: 100,
+      quarterly: 100,
+      school_year: 100,
+      default: 100,
+    },
     partnerId: 'praxis_welcome',
     partnerName: 'Bienvenue Praxis',
     partnerCommissionPercent: 0,
     active: true,
-    allowedPlans: ['monthly', 'quarterly', 'school_year'],
-    description: 'Offre de bienvenue -30% premier mois',
+    allowedPlans: ['starter', 'monthly', 'quarterly', 'school_year', 'extra_100', 'extra_200', 'extra_300', 'extra_500', 'extra_1000', 'school_small', 'school_medium', 'school_large', 'school_xl', 'school_annual'],
+    description: 'Offre de bienvenue (+100 copies supplémentaires offertes)',
   },
   PROFMARIE: {
     code: 'PROFMARIE',
-    discountPercent: 30,
-    firstMonthOnly: true,
+    discountPercent: 0,
+    firstMonthOnly: false,
+    bonusCredits: {
+      starter: 100,
+      monthly: 100,
+      quarterly: 100,
+      school_year: 100,
+      default: 100,
+    },
     partnerId: 'partner_marie',
     partnerName: 'Professeure Marie',
     partnerCommissionPercent: 20,
     active: true,
-    allowedPlans: ['monthly', 'quarterly', 'school_year'],
-    description: 'Code promo influenceur -30% premier mois',
+    allowedPlans: ['starter', 'monthly', 'quarterly', 'school_year', 'extra_100', 'extra_200', 'extra_300', 'extra_500', 'extra_1000', 'school_small', 'school_medium', 'school_large', 'school_xl', 'school_annual'],
+    description: 'Code partenaire Professeure Marie (+100 copies supplémentaires offertes)',
   },
   PRAXIS30: {
     code: 'PRAXIS30',
-    discountPercent: 30,
-    firstMonthOnly: true,
+    discountPercent: 0,
+    firstMonthOnly: false,
+    bonusCredits: {
+      starter: 100,
+      monthly: 100,
+      quarterly: 100,
+      school_year: 100,
+      default: 100,
+    },
     partnerId: 'praxis_internal',
     partnerName: 'Offre Spéciale Praxis',
     partnerCommissionPercent: 0,
     active: true,
-    allowedPlans: ['starter', 'monthly', 'quarterly', 'school_year'],
-    description: 'Réduction spéciale 30% premier mois',
+    allowedPlans: ['starter', 'monthly', 'quarterly', 'school_year', 'extra_100', 'extra_200', 'extra_300', 'extra_500', 'extra_1000', 'school_small', 'school_medium', 'school_large', 'school_xl', 'school_annual'],
+    description: 'Offre spéciale Praxis (+100 copies supplémentaires offertes)',
   },
   AMBASSADEUR20: {
     code: 'AMBASSADEUR20',
-    discountPercent: 30,
-    firstMonthOnly: true,
+    discountPercent: 0,
+    firstMonthOnly: false,
+    bonusCredits: {
+      starter: 100,
+      monthly: 100,
+      quarterly: 100,
+      school_year: 100,
+      default: 100,
+    },
     partnerId: 'partner_ambassadeur',
     partnerName: 'Ambassadeur Enseignant',
     partnerCommissionPercent: 25,
     active: true,
-    allowedPlans: ['starter', 'monthly', 'quarterly', 'school_year'],
-    description: 'Code ambassadeur -30% premier mois',
+    allowedPlans: ['starter', 'monthly', 'quarterly', 'school_year', 'extra_100', 'extra_200', 'extra_300', 'extra_500', 'extra_1000', 'school_small', 'school_medium', 'school_large', 'school_xl', 'school_annual'],
+    description: 'Code ambassadeur (+100 copies supplémentaires offertes)',
   },
 };
 
@@ -274,10 +309,12 @@ export function findPromoCode(inputCode: string | undefined | null): PromoCodeCo
 }
 
 export function getPromoBonusCredits(promo: PromoCodeConfig | null | undefined, planId: string): number {
-  if (!promo || !promo.bonusCredits) return 0;
-  if (planId === 'monthly') return promo.bonusCredits.monthly ?? promo.bonusCredits.default ?? 100;
-  if (planId === 'quarterly') return promo.bonusCredits.quarterly ?? 300;
-  if (planId === 'school_year') return promo.bonusCredits.school_year ?? 1000;
+  if (!promo) return 0;
+  if (!promo.bonusCredits) return 100;
+  if (promo.bonusCredits.starter !== undefined && planId === 'starter') return promo.bonusCredits.starter;
+  if (promo.bonusCredits.monthly !== undefined && planId === 'monthly') return promo.bonusCredits.monthly;
+  if (promo.bonusCredits.quarterly !== undefined && planId === 'quarterly') return promo.bonusCredits.quarterly;
+  if (promo.bonusCredits.school_year !== undefined && planId === 'school_year') return promo.bonusCredits.school_year;
   return promo.bonusCredits.default ?? 100;
 }
 
@@ -2627,15 +2664,42 @@ app.post('/api/leads/notify-arrival', async (req, res) => {
   }
 
   const leads = loadLeads();
+  // Vérifier proactivement si l'adresse email ou le numéro appartient à un ambassadeur / affilié
+  let isAffiliate = false;
+  let affiliateCode = '';
+  let affiliateRole = 'teacher';
+  try {
+    const affData = loadAffiliatesData();
+    const matchedAff = (affData.affiliates || []).find((a: any) =>
+      (a.email && cleanEmail && a.email.toLowerCase() === cleanEmail) ||
+      (cleanWhatsapp && a.phone && a.phone.replace(/[^0-9]/g, '') === cleanWhatsapp.replace(/[^0-9]/g, ''))
+    );
+    const isAuthorizedEmail = (affData.authorizedEmails || []).some(
+      (e: string) => cleanEmail && e.toLowerCase() === cleanEmail
+    );
+    if (matchedAff || isAuthorizedEmail) {
+      isAffiliate = true;
+      affiliateRole = 'affiliate';
+      affiliateCode = matchedAff?.code || matchedAff?.affiliateCode || '';
+    }
+  } catch (err) {
+    console.warn('[Leads] Erreur vérification statut affilié :', err);
+  }
+
   let existingLead = leads.find(
     (l) => (cleanEmail && l.email && l.email.toLowerCase() === cleanEmail) || (cleanWhatsapp && l.whatsapp === cleanWhatsapp)
   );
 
-  // Si l'utilisateur est déjà inscrit, on met à jour son profil silencieusement sans notifier Telegram
+  // Si l'utilisateur est déjà inscrit, on met à jour son profil silencieusement
   if (existingLead) {
     if (name && (!existingLead.name || existingLead.name === 'Enseignant')) existingLead.name = name;
     if (school && !existingLead.school) existingLead.school = school;
     if (cleanWhatsapp && !existingLead.whatsapp) existingLead.whatsapp = cleanWhatsapp;
+    if (isAffiliate) {
+      existingLead.role = 'affiliate';
+      existingLead.isAffiliate = true;
+      if (affiliateCode) existingLead.affiliateCode = affiliateCode;
+    }
     existingLead.lastActiveAt = new Date().toISOString();
     saveLeads(leads);
     return res.json({ success: true, lead: existingLead, isNew: false });
@@ -2648,8 +2712,11 @@ app.post('/api/leads/notify-arrival', async (req, res) => {
     name: name || (cleanEmail.includes('@') ? cleanEmail.split('@')[0] : 'Enseignant'),
     email: cleanEmail,
     whatsapp: cleanWhatsapp,
-    school: school || '',
+    school: school || (isAffiliate ? 'Partenaire Affilié Praxis' : ''),
     city: '',
+    role: affiliateRole,
+    isAffiliate,
+    affiliateCode,
     plan: 'trial',
     status: 'trial',
     trialDaysLeft: 7,
@@ -2658,7 +2725,9 @@ app.post('/api/leads/notify-arrival', async (req, res) => {
     extraCredits: 0,
     copiesCorrected: 0,
     totalSpent: 0,
-    notes: `Nouvelle inscription enregistrée via ${source || 'portail web'}.`,
+    notes: isAffiliate
+      ? `Partenaire Ambassadeur officiel Praxis (Code : ${affiliateCode || 'en attente'}).`
+      : `Nouvelle inscription enregistrée via ${source || 'portail web'}.`,
     createdAt: new Date().toISOString(),
     lastActiveAt: new Date().toISOString(),
   };
@@ -3093,15 +3162,26 @@ app.get('/api/teacher/me', (req, res) => {
   let affiliateCode = teacher.affiliateCode || '';
   try {
     const affData = loadAffiliatesData();
+    const cleanTeacherEmail = (teacher.email || '').toLowerCase().trim();
     const matchedAff = (affData.affiliates || []).find(
       (a: any) =>
-        (a.email && teacher.email && a.email.toLowerCase() === teacher.email.toLowerCase()) ||
+        (a.email && cleanTeacherEmail && a.email.toLowerCase().trim() === cleanTeacherEmail) ||
         (a.phone && teacher.whatsapp && a.phone.replace(/[^0-9]/g, '') === teacher.whatsapp.replace(/[^0-9]/g, ''))
     );
-    if (matchedAff) {
+    const isAuthorizedEmail = (affData.authorizedEmails || []).some(
+      (e: string) => cleanTeacherEmail && e.toLowerCase().trim() === cleanTeacherEmail
+    );
+    if (matchedAff || isAuthorizedEmail) {
       isAffiliate = true;
       if (!affiliateCode) {
-        affiliateCode = matchedAff.code || matchedAff.affiliateCode || '';
+        affiliateCode = matchedAff?.code || matchedAff?.affiliateCode || '';
+      }
+      teacher.isAffiliate = true;
+      if (teacher.role !== 'admin') {
+        teacher.role = 'affiliate';
+      }
+      if (affiliateCode && !teacher.affiliateCode) {
+        teacher.affiliateCode = affiliateCode;
       }
     }
   } catch {}
@@ -5246,6 +5326,14 @@ app.get('/api/affiliate/:code?', (req, res) => {
       commissionDue: pendingBalance,
       pendingBalance,
       clients: combinedClients,
+      calendar: affiliate.calendar || [],
+      paymentHistory: affiliate.paymentHistory || [],
+      bonus: affiliate.bonus || {
+        code: affiliate.code || affiliate.affiliateCode || partnerCode,
+        bonusPerClient: '+100 corrections',
+        conversion: combinedClients.length,
+        totalBonusValue: combinedClients.length * 1000,
+      },
     };
 
     res.json({
@@ -5259,7 +5347,7 @@ app.get('/api/affiliate/:code?', (req, res) => {
   }
 });
 
-// Demander un versement (seuil 100 000 FCFA)
+// Demander un versement (aucun montant minimum imposé, retrait libre)
 app.post('/api/affiliate/payout', (req, res) => {
   try {
     const { affiliateCode, amount, paymentMethod, phoneOrIban, notes } = req.body;
@@ -5269,9 +5357,9 @@ app.post('/api/affiliate/payout', (req, res) => {
       return res.status(400).json({ error: 'Code affilié obligatoire.' });
     }
 
-    if (isNaN(requestedAmount) || requestedAmount < 100000) {
+    if (isNaN(requestedAmount) || requestedAmount <= 0) {
       return res.status(400).json({
-        error: `Le montant minimum pour un versement est de 100 000 FCFA. Montant demandé : ${requestedAmount || 0} FCFA.`,
+        error: `Veuillez spécifier un montant valide supérieur à 0 FCFA. Montant demandé : ${requestedAmount || 0} FCFA.`,
       });
     }
 
