@@ -528,13 +528,14 @@ function saveLeads(leads: LeadRecord[]) {
 }
 
 // --- Live Supabase Database Connector (Real-Time Live Data, Zero Mock Data) ---
+const OFFICIAL_PRAXIS_SUPABASE_URL = 'https://chrtrfyynnbgxtysrzjo.supabase.co';
+const OFFICIAL_PRAXIS_SERVICE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNocnRyZnl5bm5iZ3h0eXNyempvIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc5MDc3NTExNCwiZXhwIjoyMTA2MzUxMTE0fQ.F-U0Kzt-RJQMvUEGkVWmKB8RThoav4JMAQ36A549sHQ';
+
 function getSupabaseServerClient() {
-  const url = (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '').trim();
+  const url = (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || OFFICIAL_PRAXIS_SUPABASE_URL).trim();
   const key = (
     process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
-    process.env.VITE_SUPABASE_ANON_KEY ||
-    ''
+    OFFICIAL_PRAXIS_SERVICE_KEY
   ).trim();
 
   if (!url || !key || url.includes('your-project') || key.length < 10) {
@@ -555,84 +556,117 @@ export async function getLiveTeachers(): Promise<{ teachers: LeadRecord[]; sourc
 
   if (supabase) {
     try {
-      const { data: profiles, error: pError } = await supabase
-        .from('profiles')
-        .select('*')
-        .order('created_at', { ascending: false });
+      // Fetch profiles, auth users, credit balances, and subscriptions in parallel
+      const [profilesRes, authRes, balancesRes, subsRes] = await Promise.all([
+        supabase.from('profiles').select('*').order('created_at', { ascending: false }),
+        supabase.auth.admin.listUsers({ page: 1, perPage: 1000 }).catch(() => ({ data: { users: [] }, error: null })),
+        supabase.from('user_credit_balances').select('*'),
+        supabase.from('user_subscriptions').select('*'),
+      ]);
 
-      if (!pError && profiles && Array.isArray(profiles)) {
-        // Fetch credit balances & subscriptions in parallel
-        const [balancesRes, subsRes] = await Promise.all([
-          supabase.from('user_credit_balances').select('*'),
-          supabase.from('user_subscriptions').select('*'),
-        ]);
+      const profiles = (profilesRes as any)?.data || [];
+      const authUsers = (authRes as any)?.data?.users || [];
 
-        const balancesMap = new Map();
-        if (balancesRes.data && Array.isArray(balancesRes.data)) {
-          balancesRes.data.forEach((b: any) => balancesMap.set(b.teacher_id, b));
-        }
-
-        const subsMap = new Map();
-        if (subsRes.data && Array.isArray(subsRes.data)) {
-          subsRes.data.forEach((s: any) => subsMap.set(s.teacher_id, s));
-        }
-
-        const mapped: LeadRecord[] = profiles.map((p: any) => {
-          const bal = balancesMap.get(p.id);
-          const sub = subsMap.get(p.id);
-
-          let plan: any = 'trial';
-          if (sub?.plan_id) {
-            plan = sub.plan_id;
-          } else if (p.plan) {
-            plan = p.plan;
-          }
-
-          let status: any = 'active';
-          if (sub?.status) {
-            status = sub.status === 'expired' ? 'inactive' : sub.status;
-          }
-
-          const freeCreds = bal?.free_credits ?? 15;
-          const subCreds = bal?.subscription_credits ?? 0;
-          const purchasedCreds = bal?.purchased_credits ?? 0;
-          const totalAvail = bal?.total_available_credits ?? (freeCreds + subCreds + purchasedCreds);
-
-          return {
-            id: p.id,
-            name: p.full_name || p.email?.split('@')[0] || 'Enseignant',
-            email: p.email || '',
-            whatsapp: p.phone_whatsapp || '',
-            school: p.school_name || '',
-            city: p.city || '',
-            country: p.country || 'Côte d’Ivoire',
-            plan,
-            status,
-            role: p.role || 'teacher',
-            affiliateCode: p.referral_code,
-            createdAt: p.created_at || new Date().toISOString(),
-            lastActiveAt: p.updated_at || p.created_at || new Date().toISOString(),
-            copiesCorrected: bal?.total_copies_corrected || 0,
-            subscriptionCredits: subCreds,
-            extraCredits: purchasedCreds,
-            quota: totalAvail,
-            totalSpent: sub?.plan_id === 'annual' ? 99.99 : sub?.plan_id === 'monthly' ? 9.99 : 0,
-          };
-        });
-
-        // Merge any real local leads not yet synced in Supabase (avoid duplicates by email)
-        const localLeads = loadLeads();
-        const existingEmails = new Set(mapped.map((m) => (m.email || '').toLowerCase().trim()));
-        localLeads.forEach((l) => {
-          if (l.email && !existingEmails.has(l.email.toLowerCase().trim())) {
-            mapped.push(l);
-          }
-        });
-
-        return { teachers: mapped, source: 'supabase', total: mapped.length };
-      } else if (pError) {
-        console.warn('[Supabase Server] Erreur profiles query:', pError.message);
+      const balancesMap = new Map();
+      if ((balancesRes as any)?.data && Array.isArray((balancesRes as any).data)) {
+        (balancesRes as any).data.forEach((b: any) => balancesMap.set(b.teacher_id, b));
       }
+
+      const subsMap = new Map();
+      if ((subsRes as any)?.data && Array.isArray((subsRes as any).data)) {
+        (subsRes as any).data.forEach((s: any) => subsMap.set(s.teacher_id, s));
+      }
+
+      const handledUserIds = new Set<string>();
+      const mapped: LeadRecord[] = [];
+
+      // 1. Map all user profiles
+      profiles.forEach((p: any) => {
+        handledUserIds.add(p.id);
+        const bal = balancesMap.get(p.id);
+        const sub = subsMap.get(p.id);
+
+        let plan: any = 'trial';
+        if (sub?.plan_id) {
+          plan = sub.plan_id;
+        } else if (p.plan) {
+          plan = p.plan;
+        }
+
+        let status: any = 'active';
+        if (sub?.status) {
+          status = sub.status === 'expired' ? 'inactive' : sub.status;
+        }
+
+        const freeCreds = bal?.free_credits ?? 15;
+        const subCreds = bal?.subscription_credits ?? 0;
+        const purchasedCreds = bal?.purchased_credits ?? 0;
+        const totalAvail = bal?.total_available_credits ?? (freeCreds + subCreds + purchasedCreds);
+
+        mapped.push({
+          id: p.id,
+          name: p.full_name || p.email?.split('@')[0] || 'Enseignant',
+          email: p.email || '',
+          whatsapp: p.phone_whatsapp || '',
+          school: p.school_name || 'Établissement non précisé',
+          city: p.city || '',
+          country: p.country || 'Côte d’Ivoire',
+          plan,
+          status,
+          role: p.role || 'teacher',
+          affiliateCode: p.referral_code,
+          createdAt: p.created_at || new Date().toISOString(),
+          lastActiveAt: p.updated_at || p.created_at || new Date().toISOString(),
+          copiesCorrected: bal?.total_copies_corrected || 0,
+          subscriptionCredits: subCreds,
+          extraCredits: purchasedCreds,
+          quota: totalAvail,
+          totalSpent: sub?.plan_id === 'annual' ? 99.99 : sub?.plan_id === 'monthly' ? 9.99 : 0,
+        });
+      });
+
+      // 2. ALSO include any registered users in auth.users who haven't completed a profile or haven't logged in yet!
+      authUsers.forEach((u: any) => {
+        if (!handledUserIds.has(u.id)) {
+          handledUserIds.add(u.id);
+          const bal = balancesMap.get(u.id);
+          const sub = subsMap.get(u.id);
+
+          mapped.push({
+            id: u.id,
+            name: u.user_metadata?.full_name || u.email?.split('@')[0] || 'Enseignant inscrit',
+            email: u.email || '',
+            whatsapp: u.user_metadata?.whatsapp || u.phone || '',
+            school: u.user_metadata?.school || 'Établissement non précisé',
+            city: u.user_metadata?.city || '',
+            country: 'Côte d’Ivoire',
+            plan: (sub?.plan_id as any) || 'trial',
+            status: u.last_sign_in_at ? 'active' : 'trial',
+            role: 'teacher',
+            createdAt: u.created_at || new Date().toISOString(),
+            lastActiveAt: u.last_sign_in_at || u.created_at || new Date().toISOString(),
+            copiesCorrected: bal?.total_copies_corrected || 0,
+            subscriptionCredits: bal?.subscription_credits || 0,
+            extraCredits: bal?.purchased_credits || 0,
+            quota: bal?.total_available_credits ?? 15,
+            totalSpent: 0,
+          });
+        }
+      });
+
+      // 3. Merge any real local leads not yet synced in Supabase (avoid duplicates by email)
+      const localLeads = loadLeads();
+      const existingEmails = new Set(mapped.map((m) => (m.email || '').toLowerCase().trim()));
+      localLeads.forEach((l) => {
+        if (l.email && !existingEmails.has(l.email.toLowerCase().trim())) {
+          mapped.push(l);
+        }
+      });
+
+      // Sort descending by registration date
+      mapped.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+      return { teachers: mapped, source: 'supabase', total: mapped.length };
     } catch (err: any) {
       console.warn('[Supabase Server] Fallback exception:', err?.message);
     }
