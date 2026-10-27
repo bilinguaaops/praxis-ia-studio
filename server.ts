@@ -6,7 +6,13 @@ import dotenv from 'dotenv';
 import { GoogleGenAI, Type } from '@google/genai';
 import Anthropic from '@anthropic-ai/sdk';
 import { createClient } from '@supabase/supabase-js';
+import WebSocket from 'ws';
 import { createServer as createViteServer } from 'vite';
+
+// Ensure globalThis.WebSocket exists on all Node.js versions (including Node 18/20 on Render)
+if (!globalThis.WebSocket) {
+  (globalThis as any).WebSocket = WebSocket;
+}
 
 dotenv.config({ override: true });
 
@@ -4841,9 +4847,9 @@ app.get('/api/admin/teachers', requireAdminAuth, async (req, res) => {
 // Protected: Check live database status
 app.get('/api/admin/database-status', requireAdminAuth, async (_req, res) => {
   const supabase = getSupabaseServerClient();
-  const url = (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '').trim();
+  const url = (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || OFFICIAL_PRAXIS_SUPABASE_URL).trim();
   const hasKey = Boolean(
-    (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || '').trim()
+    (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY || OFFICIAL_PRAXIS_SERVICE_KEY || '').trim()
   );
 
   if (!supabase || !url || !hasKey) {
