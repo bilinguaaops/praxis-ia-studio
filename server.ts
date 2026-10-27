@@ -26,6 +26,33 @@ if (
   delete process.env.ANTHROPIC_API_KEY;
 }
 
+// Fallback to project configuration key if environment variable was revoked or missing
+if (!process.env.ANTHROPIC_API_KEY) {
+  const varConfigFile = path.join(process.cwd(), 'public', 'assets', 'aistudio', 'variable_e957607c.txt');
+  if (fs.existsSync(varConfigFile)) {
+    try {
+      const varContent = fs.readFileSync(varConfigFile, 'utf-8');
+      const m = varContent.match(/ANTHROPIC_API_KEY=["']?(sk-ant-usr-[^"'\s\n]+)["']?/);
+      if (m && m[1]) {
+        process.env.ANTHROPIC_API_KEY = m[1].trim();
+      }
+    } catch {}
+  }
+}
+
+// Filter out invalid GEMINI_API_KEY (such as browser session tokens starting with AQ.)
+// Official Google Cloud / AI Studio keys start with 'AIzaSy'
+if (
+  process.env.GEMINI_API_KEY &&
+  (process.env.GEMINI_API_KEY.startsWith('AQ.') ||
+   process.env.GEMINI_API_KEY.includes('dummy') ||
+   process.env.GEMINI_API_KEY.includes('placeholder') ||
+   !process.env.GEMINI_API_KEY.startsWith('AIzaSy'))
+) {
+  console.warn('[Praxis IA] GEMINI_API_KEY ignorée car elle ne correspond pas au format officiel Google (préfixe AIzaSy... requis). Renseignez votre clé Gemini sur /admin.');
+  delete process.env.GEMINI_API_KEY;
+}
+
 const app = express();
 const PORT = 3000;
 
@@ -931,13 +958,15 @@ async function getResolvedClaudeCandidates(): Promise<string[]> {
 
       // EXCLUSIVELY filter for valid Haiku models (strict: zero Sonnet, zero Opus)
       const haikuIds = availableIds.filter(
-        (id: string) => id.toLowerCase().includes('haiku') && !id.includes('4-5')
+        (id: string) => id.toLowerCase().includes('haiku')
       );
 
       const sortedHaikus = [...haikuIds].sort((a, b) => {
         const score = (name: string) => {
           let s = 0;
-          if (name.includes('3-5') || name.includes('3.5')) s += 20;
+          if (name.includes('5-5') || name.includes('5.5')) s += 30;
+          else if (name.includes('4-5') || name.includes('4.5')) s += 25;
+          else if (name.includes('3-5') || name.includes('3.5')) s += 20;
           else if (name.includes('3')) s += 10;
           return s;
         };
@@ -945,6 +974,8 @@ async function getResolvedClaudeCandidates(): Promise<string[]> {
       });
 
       const baseList = sortedHaikus.length > 0 ? sortedHaikus : [
+        'claude-haiku-4-5-20251001',
+        'claude-haiku-5-5',
         AI_ESCALATION_MODEL,
         AI_BACKUP_CLAUDE_MODEL,
         'claude-3-haiku-20240307',
@@ -996,6 +1027,8 @@ async function getResolvedClaudeCandidates(): Promise<string[]> {
   // Fallback defaults with ONLY economical valid Haiku identifiers
   const defaults = [
     ...(envModel ? [envModel] : []),
+    'claude-haiku-4-5-20251001',
+    'claude-haiku-5-5',
     AI_ESCALATION_MODEL,
     AI_BACKUP_CLAUDE_MODEL,
     'claude-3-haiku-20240307',
@@ -1009,6 +1042,9 @@ let geminiGlobalCooldownUntil = 0;
 
 // High-availability prioritized Gemini flash models (active, fast, official)
 const GEMINI_FLASH_MODELS = [
+  'gemini-2.5-flash',
+  'gemini-2.0-flash',
+  'gemini-1.5-flash',
   AI_PRIMARY_MODEL,
   AI_BACKUP_GEMINI_MODEL,
   'gemini-flash-latest',
@@ -5036,6 +5072,13 @@ app.post('/api/admin/settings/keys', requireAdminAuth, (req, res) => {
     }
 
     fs.writeFileSync(envPath, content, 'utf8');
+
+    // Reset AI clients & flags immediately so new keys take effect without server restart
+    aiClient = null;
+    anthropicClient = null;
+    isAnthropicAuthDisabled = false;
+    isAnthropicCreditExhausted = false;
+    cachedClaudeModels = null;
 
     res.json({
       success: true,
