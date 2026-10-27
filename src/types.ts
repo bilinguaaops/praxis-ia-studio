@@ -545,5 +545,15 @@ export interface AffiliateData {
   bonus: AffiliateBonusInfo;
   calendar: PayoutCalendarItem[];
 }
-
-
+export interface BroadcastNotification {
+  id: string;
+  title: string;
+  message: string;
+  type: 'info' | 'announcement' | 'warning' | 'success';
+  badgeText?: string;
+  linkUrl?: string;
+  linkText?: string;
+  createdAt: string;
+  createdBy?: string;
+  isActive: boolean;
+}

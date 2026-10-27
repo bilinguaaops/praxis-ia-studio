@@ -1,0 +1,32 @@
+[
+  {
+    "id": "notif_mvqz377w_rkzn",
+    "title": "Nouvelle fonctionnalité disponible",
+    "message": "Chers professeurs, vous pouvez désormais suivre les annonces pédagogiques directement depuis cette cloche.",
+    "type": "info",
+    "badgeText": "Nouveau",
+    "createdAt": "2026-10-27T17:41:58.988Z",
+    "createdBy": "Direction Praxis",
+    "isActive": true
+  },
+  {
+    "id": "notif_welcome",
+    "title": "Bienvenue sur Praxis Pro 🎉",
+    "message": "Vos 15 corrections d'essai sont disponibles. Importez vos copies et découvrez la correction intelligente avec double moteur IA.",
+    "type": "announcement",
+    "badgeText": "Bienvenue",
+    "createdAt": "2026-10-27T17:41:10.145Z",
+    "createdBy": "Direction Praxis",
+    "isActive": true
+  },
+  {
+    "id": "notif_haiku_engine",
+    "title": "Moteur IA Haute Disponibilité Activé ⚡",
+    "message": "Praxis Pro intègre désormais un double moteur IA intelligent garantissant une correction continue sans interruption même en période de forte affluence.",
+    "type": "success",
+    "badgeText": "Mise à jour",
+    "createdAt": "2026-10-27T16:41:10.146Z",
+    "createdBy": "Support Technique",
+    "isActive": true
+  }
+]

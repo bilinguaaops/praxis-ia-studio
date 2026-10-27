@@ -44,6 +44,8 @@ import {
   ArrowLeft,
   Award,
   Database,
+  Bell,
+  Radio,
 } from 'lucide-react';
 import {
   Chart,
@@ -61,6 +63,7 @@ import {
 } from 'chart.js';
 import { TeacherAccount, TransactionRecord, AdminKPISummary, SaaSPlan, AccountStatus, SchoolQuoteRequest } from '../types';
 import { AdminAffiliatesView } from './AdminAffiliatesView';
+import { AdminNotificationsView } from './AdminNotificationsView';
 
 // Register Chart.js components
 Chart.register(
@@ -81,7 +84,7 @@ interface AdminDashboardProps {
   onBackToApp: () => void;
 }
 
-type TabKey = 'overview' | 'crm' | 'transactions' | 'automations' | 'quotes' | 'affiliates';
+type TabKey = 'overview' | 'crm' | 'transactions' | 'automations' | 'quotes' | 'affiliates' | 'notifications';
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToApp }) => {
   // Authentication State
@@ -1342,6 +1345,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToApp }) =
               >
                 <Award className="w-3.5 h-3.5" />
                 <span>Affiliés</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab('notifications')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
+                  activeTab === 'notifications'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                }`}
+              >
+                <Bell className="w-3.5 h-3.5" />
+                <span>Diffusions & Cloche</span>
               </button>
             </nav>
 
@@ -2925,6 +2941,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToApp }) =
         {activeTab === 'affiliates' && (
           <div className="animate-fade-in">
             <AdminAffiliatesView onNotify={(text, type) => showToast(text, type)} />
+          </div>
+        )}
+
+        {/* ========================================================= */}
+        {/* TAB 7: DIFFUSIONS & ANNONCES UTILISATEURS (CLOCHE) */}
+        {/* ========================================================= */}
+        {activeTab === 'notifications' && (
+          <div className="animate-fade-in">
+            <AdminNotificationsView
+              adminToken={getAdminToken()}
+              onNotify={(text, type) => showToast(text, type)}
+            />
           </div>
         )}
       </main>

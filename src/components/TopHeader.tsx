@@ -13,8 +13,13 @@ import {
   Sun,
   Moon,
   ShieldCheck,
+  Megaphone,
+  Info,
+  AlertTriangle,
+  CheckCircle2,
+  ExternalLink,
 } from 'lucide-react';
-import { MainView, LeadData } from '../types';
+import { MainView, LeadData, BroadcastNotification } from '../types';
 import { useTheme } from '../lib/useTheme';
 
 interface TopHeaderProps {
@@ -45,10 +50,54 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
   const { isDark, toggleTheme } = useTheme();
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
-  const [unreadNotifsCount, setUnreadNotifsCount] = useState(1);
+  const [notifications, setNotifications] = useState<BroadcastNotification[]>([]);
+  const [readNotifIds, setReadNotifIds] = useState<string[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('praxis_read_notifs') || '[]');
+    } catch {
+      return [];
+    }
+  });
 
   const notifRef = useRef<HTMLDivElement>(null);
   const profileRef = useRef<HTMLDivElement>(null);
+
+  // Fetch live broadcast notifications
+  const fetchNotifications = async () => {
+    try {
+      const res = await fetch('/api/notifications');
+      const data = await res.json();
+      if (data.success && Array.isArray(data.notifications)) {
+        setNotifications(data.notifications);
+      }
+    } catch {}
+  };
+
+  useEffect(() => {
+    fetchNotifications();
+    const interval = setInterval(fetchNotifications, 45000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const unreadCount = notifications.filter((n) => !readNotifIds.includes(n.id)).length;
+
+  const markAllAsRead = () => {
+    const allIds = notifications.map((n) => n.id);
+    setReadNotifIds(allIds);
+    try {
+      localStorage.setItem('praxis_read_notifs', JSON.stringify(allIds));
+    } catch {}
+  };
+
+  const markOneAsRead = (id: string) => {
+    if (!readNotifIds.includes(id)) {
+      const updated = [...readNotifIds, id];
+      setReadNotifIds(updated);
+      try {
+        localStorage.setItem('praxis_read_notifs', JSON.stringify(updated));
+      } catch {}
+    }
+  };
 
   // Close dropdowns on outside click
   useEffect(() => {
@@ -179,38 +228,127 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
         <div className="relative" ref={notifRef}>
           <button
             type="button"
-            onClick={() => setIsNotifOpen(!isNotifOpen)}
+            onClick={() => {
+              setIsNotifOpen(!isNotifOpen);
+              if (!isNotifOpen && unreadCount > 0) {
+                // Keep notifications visible and mark them as read
+              }
+            }}
             className="relative p-1.5 rounded-md text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
             aria-label="Voir les notifications"
           >
             <Bell className="w-4 h-4" />
-            {unreadNotifsCount > 0 && (
-              <span className="absolute top-1 right-1 w-1.5 h-1.5 bg-blue-600 rounded-full" />
+            {unreadCount > 0 && (
+              <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 flex items-center justify-center bg-blue-600 text-white text-[10px] font-bold rounded-full shadow-sm animate-pulse">
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </span>
             )}
           </button>
 
           {isNotifOpen && (
-            <div className="absolute right-0 mt-2 w-80 bg-white dark:bg-slate-900 rounded-xl shadow-lg border border-slate-200 dark:border-slate-800 p-3 space-y-2 z-50 text-xs">
+            <div className="absolute right-0 mt-2 w-84 sm:w-96 bg-white dark:bg-slate-900 rounded-xl shadow-xl border border-slate-200 dark:border-slate-800 p-3 space-y-2 z-50 text-xs">
               <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
-                <span className="font-semibold text-slate-900 dark:text-white">Notifications</span>
-                {unreadNotifsCount > 0 && (
+                <div className="flex items-center gap-1.5">
+                  <span className="font-semibold text-slate-900 dark:text-white">Annonces & Notifications</span>
+                  {unreadCount > 0 && (
+                    <span className="bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded-full text-[10px] font-semibold">
+                      {unreadCount} nouvelle{unreadCount > 1 ? 's' : ''}
+                    </span>
+                  )}
+                </div>
+                {unreadCount > 0 && (
                   <button
                     type="button"
-                    onClick={() => setUnreadNotifsCount(0)}
-                    className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline"
+                    onClick={markAllAsRead}
+                    className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline font-medium cursor-pointer"
                   >
-                    Marquer tout comme lu
+                    Tout marquer comme lu
                   </button>
                 )}
               </div>
 
-              <div className="space-y-1.5 pt-1">
-                <div className="p-2 rounded-lg bg-slate-50 dark:bg-slate-800/60 text-slate-700 dark:text-slate-300">
-                  <p className="font-medium text-slate-900 dark:text-slate-100">Bienvenue sur Praxis</p>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                    Vos 15 corrections d'essai sont prêtes. Vous pouvez lancer votre premier devoir.
-                  </p>
-                </div>
+              <div className="max-h-96 overflow-y-auto space-y-2 pt-1 divide-y divide-slate-100 dark:divide-slate-800/60">
+                {notifications.length === 0 ? (
+                  <div className="text-center py-6 text-slate-400 dark:text-slate-500">
+                    <Bell className="w-6 h-6 mx-auto mb-1.5 opacity-40" />
+                    <p className="text-[11px]">Aucune notification pour le moment.</p>
+                  </div>
+                ) : (
+                  notifications.map((n) => {
+                    const isUnread = !readNotifIds.includes(n.id);
+                    const typeColor =
+                      n.type === 'warning'
+                        ? 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800/40'
+                        : n.type === 'success'
+                        ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800/40'
+                        : n.type === 'info'
+                        ? 'text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-950/40 border-sky-200 dark:border-sky-800/40'
+                        : 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40 border-blue-200 dark:border-blue-800/40';
+
+                    const IconComponent =
+                      n.type === 'warning'
+                        ? AlertTriangle
+                        : n.type === 'success'
+                        ? CheckCircle2
+                        : n.type === 'info'
+                        ? Info
+                        : Megaphone;
+
+                    return (
+                      <div
+                        key={n.id}
+                        onClick={() => markOneAsRead(n.id)}
+                        className={`pt-2 first:pt-0 p-2.5 rounded-lg transition-colors cursor-pointer ${
+                          isUnread
+                            ? 'bg-blue-50/70 dark:bg-blue-950/30 border-l-2 border-l-blue-600'
+                            : 'bg-slate-50/50 dark:bg-slate-800/40 border-l-2 border-l-transparent'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-2 mb-1">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium border ${typeColor}`}>
+                              <IconComponent className="w-3 h-3" />
+                              {n.badgeText || (n.type === 'warning' ? 'Alerte' : n.type === 'success' ? 'Nouveau' : n.type === 'info' ? 'Info' : 'Annonce')}
+                            </span>
+                            <span className="font-semibold text-slate-900 dark:text-slate-100 text-xs">
+                              {n.title}
+                            </span>
+                          </div>
+                          {isUnread && (
+                            <span className="w-2 h-2 rounded-full bg-blue-600 flex-shrink-0 mt-1" title="Non lu" />
+                          )}
+                        </div>
+
+                        <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed whitespace-pre-line pl-0.5">
+                          {n.message}
+                        </p>
+
+                        <div className="flex items-center justify-between mt-2 pt-1.5 border-t border-slate-100/80 dark:border-slate-800/50 text-[10px] text-slate-400 dark:text-slate-500">
+                          <span>
+                            {new Date(n.createdAt).toLocaleDateString('fr-FR', {
+                              day: 'numeric',
+                              month: 'short',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </span>
+                          {n.linkUrl && (
+                            <a
+                              href={n.linkUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="inline-flex items-center gap-1 text-blue-600 dark:text-blue-400 font-medium hover:underline"
+                            >
+                              <span>{n.linkText || 'En savoir plus'}</span>
+                              <ExternalLink className="w-2.5 h-2.5" />
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
               </div>
             </div>
           )}
