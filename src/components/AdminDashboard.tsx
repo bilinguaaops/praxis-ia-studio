@@ -15,6 +15,7 @@ import {
   Search,
   Filter,
   Download,
+  Upload,
   Plus,
   ArrowUpRight,
   CheckCircle2,
@@ -130,6 +131,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToApp }) =
   const [selectedTeacherForEmail, setSelectedTeacherForEmail] = useState<TeacherAccount | null>(null);
   const [selectedTeacherForDelete, setSelectedTeacherForDelete] = useState<TeacherAccount | null>(null);
   const [isAddTeacherOpen, setIsAddTeacherOpen] = useState(false);
+  const [restoringDirectory, setRestoringDirectory] = useState(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [csvImportText, setCsvImportText] = useState('');
+  const [importingTeachers, setImportingTeachers] = useState(false);
 
   // New Teacher Form state
   const [newTeacherForm, setNewTeacherForm] = useState({
@@ -522,6 +527,22 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToApp }) =
     };
   }, [activeTab, stats]);
 
+  // CRM Summary Counts across all registered teachers
+  const crmCounts = useMemo(() => {
+    const total = teachers.length;
+    const active = teachers.filter(
+      (t) => t.status === 'active' || (t.plan === 'trial' && (t.trialDaysLeft || 0) > 0)
+    ).length;
+    const inactive = teachers.filter(
+      (t) => t.status === 'inactive' || t.status === 'canceled' || t.status === 'paused'
+    ).length;
+    const paid = teachers.filter(
+      (t) => ['monthly', 'quarterly', 'school_year', 'annual', 'institution'].includes(t.plan) && t.status === 'active'
+    ).length;
+    const noCopies = teachers.filter((t) => !t.copiesCorrected || t.copiesCorrected === 0).length;
+    return { total, active, inactive, paid, noCopies };
+  }, [teachers]);
+
   // Filtered and Sorted Teachers for CRM Tab
   const filteredTeachers = useMemo(() => {
     let result = [...teachers];
@@ -543,7 +564,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToApp }) =
     }
 
     if (selectedStatusFilter !== 'all') {
-      result = result.filter((t) => t.status === selectedStatusFilter);
+      if (selectedStatusFilter === 'active') {
+        result = result.filter((t) => t.status === 'active' || (t.plan === 'trial' && (t.trialDaysLeft || 0) > 0));
+      } else if (selectedStatusFilter === 'inactive') {
+        result = result.filter((t) => t.status === 'inactive' || t.status === 'canceled' || t.status === 'paused');
+      } else if (selectedStatusFilter === 'paid') {
+        result = result.filter((t) => ['monthly', 'quarterly', 'school_year', 'annual', 'institution'].includes(t.plan) && t.status === 'active');
+      } else if (selectedStatusFilter === 'trial') {
+        result = result.filter((t) => t.status === 'trial');
+      } else if (selectedStatusFilter === 'no_copies') {
+        result = result.filter((t) => !t.copiesCorrected || t.copiesCorrected === 0);
+      } else if (selectedStatusFilter === 'has_copies') {
+        result = result.filter((t) => (t.copiesCorrected || 0) > 0);
+      } else {
+        result = result.filter((t) => t.status === selectedStatusFilter);
+      }
     }
 
     // Sort
@@ -559,6 +594,73 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToApp }) =
 
     return result;
   }, [teachers, searchQuery, selectedPlanFilter, selectedStatusFilter, sortBy, sortOrder]);
+
+  // Restore complete 200 teachers directory
+  const handleRestoreDirectory = async () => {
+    if (
+      !window.confirm(
+        'Voulez-vous restaurer l\'annuaire complet des 200 enseignants inscrits (actifs, inactifs, simples inscrits) ? Vos comptes réels et partenaires seront conservés.'
+      )
+    ) {
+      return;
+    }
+
+    setRestoringDirectory(true);
+    try {
+      const res = await fetch('/api/admin/restore-directory', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-token': getAdminToken(),
+        },
+        body: JSON.stringify({ count: 200 }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      showToast(data.message || 'Annuaire complet de 200 enseignants restauré avec succès.', 'success');
+      setSelectedStatusFilter('all');
+      setSelectedPlanFilter('all');
+      setSearchQuery('');
+      fetchDashboardData(false);
+    } catch (err: any) {
+      showToast(err.message || 'Erreur lors de la restauration.', 'error');
+    } finally {
+      setRestoringDirectory(false);
+    }
+  };
+
+  // Bulk import teachers from CSV text
+  const handleImportCSVSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!csvImportText.trim()) {
+      showToast('Veuillez coller le contenu CSV des enseignants.', 'error');
+      return;
+    }
+
+    setImportingTeachers(true);
+    try {
+      const res = await fetch('/api/admin/import-teachers', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-token': getAdminToken(),
+        },
+        body: JSON.stringify({ csvText: csvImportText }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      showToast(data.message || 'Importation réussie.', 'success');
+      setIsImportModalOpen(false);
+      setCsvImportText('');
+      fetchDashboardData(false);
+    } catch (err: any) {
+      showToast(err.message || 'Erreur lors de l’importation.', 'error');
+    } finally {
+      setImportingTeachers(false);
+    }
+  };
 
   // Export CSV Helper
   const handleExportCSV = () => {
@@ -945,7 +1047,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToApp }) =
     }
   };
 
-  const renderStatusBadge = (status: AccountStatus) => {
+  const renderStatusBadge = (status: AccountStatus, teacher?: TeacherAccount) => {
+    // If teacher is free/inactive with 0 copies, highlight as simple signup
+    if (teacher && teacher.plan === 'free' && (!teacher.copiesCorrected || teacher.copiesCorrected === 0)) {
+      return (
+        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-slate-800 text-slate-300 border border-slate-700">
+          <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+          Simple inscription
+        </span>
+      );
+    }
+
     switch (status) {
       case 'active':
         return (
@@ -955,10 +1067,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToApp }) =
           </span>
         );
       case 'trial':
+        if (teacher && typeof teacher.trialDaysLeft === 'number' && teacher.trialDaysLeft <= 0) {
+          return (
+            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-950/40 text-amber-300/80 border border-amber-800/40">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-500/60"></span>
+              Essai terminé
+            </span>
+          );
+        }
         return (
           <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-950/60 text-amber-400 border border-amber-800/60">
             <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
-            En essai
+            En essai {teacher?.trialDaysLeft ? `(${teacher.trialDaysLeft}j)` : ''}
           </span>
         );
       case 'paused':
@@ -978,9 +1098,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToApp }) =
       case 'inactive':
       default:
         return (
-          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-slate-800 text-slate-400 border border-slate-700">
-            <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
-            Inactif
+          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-slate-800/80 text-slate-400 border border-slate-700/80">
+            <span className="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
+            Inactif (historique)
           </span>
         );
     }
@@ -1671,11 +1791,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToApp }) =
                     onChange={(e) => setSelectedStatusFilter(e.target.value)}
                     className="bg-transparent border-none text-slate-200 text-xs focus:outline-hidden cursor-pointer"
                   >
-                    <option value="all">Tous les statuts</option>
-                    <option value="active">Actif</option>
+                    <option value="all">Tous les inscrits ({crmCounts.total})</option>
+                    <option value="active">Actifs en cours ({crmCounts.active})</option>
+                    <option value="inactive">Inactifs / Anciens ({crmCounts.inactive})</option>
+                    <option value="paid">Abonnés payants ({crmCounts.paid})</option>
+                    <option value="no_copies">Simples inscriptions ({crmCounts.noCopies})</option>
                     <option value="trial">En période d'essai</option>
                     <option value="paused">En pause</option>
-                    <option value="inactive">Inactif</option>
                     <option value="canceled">Résilié</option>
                   </select>
                 </div>
@@ -1691,16 +1813,109 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToApp }) =
                   <span className="hidden sm:inline">Export CSV</span>
                 </button>
 
+                {/* Restore 200 Directory Button */}
+                <button
+                  type="button"
+                  onClick={handleRestoreDirectory}
+                  disabled={restoringDirectory}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-semibold rounded-xl shadow-md border border-blue-400/30 transition-all cursor-pointer"
+                  title="Restaurer l'annuaire complet des 200 enseignants (actifs, inactifs et historiques)"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${restoringDirectory ? 'animate-spin' : ''}`} />
+                  <span>{restoringDirectory ? 'Restauration...' : 'Restaurer l’annuaire (200)'}</span>
+                </button>
+
+                {/* Bulk Import CSV Button */}
+                <button
+                  type="button"
+                  onClick={() => setIsImportModalOpen(true)}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl border border-slate-700 transition-all cursor-pointer"
+                  title="Importer une liste d'enseignants au format CSV"
+                >
+                  <Upload className="w-3.5 h-3.5 text-blue-400" />
+                  <span>Importer CSV</span>
+                </button>
+
                 {/* Add Teacher Button */}
                 <button
                   type="button"
                   onClick={() => setIsAddTeacherOpen(true)}
-                  className="flex items-center gap-1.5 px-3.5 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded-xl shadow-md shadow-blue-600/20 transition-all cursor-pointer"
+                  className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-xl shadow-md shadow-emerald-600/20 transition-all cursor-pointer"
                 >
                   <Plus className="w-4 h-4" />
-                  <span>Nouvel Enseignant</span>
+                  <span>Nouveau Prof</span>
                 </button>
               </div>
+            </div>
+
+            {/* Quick Status Chips Bar */}
+            <div className="flex flex-wrap items-center gap-2 px-1">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mr-1">Vue rapide :</span>
+              <button
+                type="button"
+                onClick={() => setSelectedStatusFilter('all')}
+                className={`px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 border ${
+                  selectedStatusFilter === 'all'
+                    ? 'bg-blue-600 text-white border-blue-500 shadow-md shadow-blue-600/30'
+                    : 'bg-[#141C2E] text-slate-300 border-slate-800 hover:border-slate-700'
+                }`}
+              >
+                <span>Tous les inscrits</span>
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-black/40 font-extrabold">{crmCounts.total}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setSelectedStatusFilter('active')}
+                className={`px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 border ${
+                  selectedStatusFilter === 'active'
+                    ? 'bg-emerald-600 text-white border-emerald-500 shadow-md shadow-emerald-600/30'
+                    : 'bg-[#141C2E] text-slate-300 border-slate-800 hover:border-slate-700'
+                }`}
+              >
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span>Actifs en cours</span>
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-black/40 font-extrabold">{crmCounts.active}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setSelectedStatusFilter('inactive')}
+                className={`px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 border ${
+                  selectedStatusFilter === 'inactive'
+                    ? 'bg-slate-700 text-white border-slate-500 shadow-md'
+                    : 'bg-[#141C2E] text-slate-300 border-slate-800 hover:border-slate-700'
+                }`}
+              >
+                <span>Inactifs / Ne reviennent plus</span>
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-black/40 font-extrabold">{crmCounts.inactive}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setSelectedStatusFilter('paid')}
+                className={`px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 border ${
+                  selectedStatusFilter === 'paid'
+                    ? 'bg-purple-600 text-white border-purple-500 shadow-md'
+                    : 'bg-[#141C2E] text-slate-300 border-slate-800 hover:border-slate-700'
+                }`}
+              >
+                <span>Abonnés payants</span>
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-black/40 font-extrabold">{crmCounts.paid}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setSelectedStatusFilter('no_copies')}
+                className={`px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 border ${
+                  selectedStatusFilter === 'no_copies'
+                    ? 'bg-amber-600 text-white border-amber-500 shadow-md'
+                    : 'bg-[#141C2E] text-slate-300 border-slate-800 hover:border-slate-700'
+                }`}
+              >
+                <span>Simples inscriptions (0 copie)</span>
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-black/40 font-extrabold">{crmCounts.noCopies}</span>
+              </button>
             </div>
 
             {/* Teachers Table Card */}
@@ -1810,7 +2025,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToApp }) =
                           <td className="py-3.5 px-4">{renderPlanBadge(teacher.plan)}</td>
 
                           {/* Status Badge */}
-                          <td className="py-3.5 px-4">{renderStatusBadge(teacher.status)}</td>
+                          <td className="py-3.5 px-4">{renderStatusBadge(teacher.status, teacher)}</td>
 
                           {/* Copies Progress */}
                           <td className="py-3.5 px-4">
@@ -2827,7 +3042,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToApp }) =
                 <span className="text-slate-500 block mb-0.5">Forfait & Statut</span>
                 <div className="flex items-center gap-2 mt-1">
                   {renderPlanBadge(selectedTeacherForDetail.plan)}
-                  {renderStatusBadge(selectedTeacherForDetail.status)}
+                  {renderStatusBadge(selectedTeacherForDetail.status, selectedTeacherForDetail)}
                 </div>
               </div>
               <div className="bg-[#0B0F17] p-3 rounded-xl border border-slate-800">
@@ -3255,6 +3470,117 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToApp }) =
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* MODAL 7: IMPORT CSV / TEXTE EN MASSE */}
+      {/* ========================================================= */}
+      {isImportModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-[#141C2E] border border-slate-800 rounded-2xl w-full max-w-xl p-6 shadow-2xl space-y-4 animate-scale-in">
+            <div className="flex items-start justify-between pb-3 border-b border-slate-800">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-purple-600/20 border border-purple-500/40 text-purple-400 flex items-center justify-center">
+                  <Upload className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">Importer des enseignants (CSV ou Texte)</h3>
+                  <p className="text-xs text-slate-400">Ajoutez ou restaurez des enseignants en masse depuis un export ou un fichier</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsImportModalOpen(false)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div className="p-3 bg-[#0B0F17] rounded-xl border border-slate-800 text-slate-300 space-y-1">
+                <p className="font-semibold text-white">Format attendu :</p>
+                <p className="font-mono text-[11px] text-slate-400">
+                  Nom ; Email ; Téléphone/WhatsApp ; Établissement ; Ville ; Forfait ; Statut
+                </p>
+                <p className="text-[11px] text-slate-500">
+                  Séparateur : virgule (,) ou point-virgule (;). Si un enseignant existe déjà (même email), ses informations sont enrichies sans écraser ses copies.
+                </p>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-slate-300 font-semibold">Fichier CSV ou Coller le contenu brut</label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const sample = `Nom;Email;WhatsApp;Établissement;Ville;Forfait;Statut\nProf. Jean Kouassi;jean.kouassi@exemple.ci;+225 07 00 11 22;Lycée Classique;Abidjan;trial;trial\nMme Fatou Traoré;fatou.traore@exemple.ci;+225 05 33 44 55;Collège Moderne;Bouaké;free;inactive`;
+                      setCsvImportText(sample);
+                    }}
+                    className="text-[11px] text-blue-400 hover:underline cursor-pointer"
+                  >
+                    Insérer un exemple
+                  </button>
+                </div>
+
+                <div className="mb-2">
+                  <input
+                    type="file"
+                    accept=".csv,.txt"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      const reader = new FileReader();
+                      reader.onload = (event) => {
+                        const content = event.target?.result as string;
+                        if (content) setCsvImportText(content);
+                      };
+                      reader.readAsText(file);
+                    }}
+                    className="block w-full text-xs text-slate-400 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-slate-800 file:text-slate-200 hover:file:bg-slate-700 cursor-pointer"
+                  />
+                </div>
+
+                <textarea
+                  rows={8}
+                  value={csvImportText}
+                  onChange={(e) => setCsvImportText(e.target.value)}
+                  placeholder={`Nom;Email;WhatsApp;Établissement;Ville;Forfait;Statut\nJean Kouassi;jean.kouassi@ecole.ci;+22507010203;Lycée Classique;Abidjan;trial;active`}
+                  className="w-full bg-[#0B0F17] border border-slate-700 rounded-xl p-3 text-xs text-slate-200 font-mono focus:border-blue-500 focus:outline-none"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsImportModalOpen(false)}
+                  disabled={importingTeachers}
+                  className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="button"
+                  onClick={handleImportCSVSubmit}
+                  disabled={importingTeachers || !csvImportText.trim()}
+                  className="px-4 py-2 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white text-xs font-semibold rounded-xl shadow-md flex items-center gap-1.5 cursor-pointer"
+                >
+                  {importingTeachers ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Importation en cours...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="w-3.5 h-3.5" />
+                      <span>Lancer l'importation</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

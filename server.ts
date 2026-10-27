@@ -4552,6 +4552,8 @@ app.get('/api/admin/stats', requireAdminAuth, (req, res) => {
 
   const allTransactions: TransactionItem[] = [];
 
+  let inactiveCount = 0;
+
   teachers.forEach((t) => {
     // Count plans
     if (t.plan === 'free') freeCount++;
@@ -4561,13 +4563,18 @@ app.get('/api/admin/stats', requireAdminAuth, (req, res) => {
     else if (t.plan === 'institution') institutionCount++;
 
     // Active paying subscribers
-    if (t.status === 'active' && ['monthly', 'annual', 'institution'].includes(t.plan)) {
+    if (t.status === 'active' && ['monthly', 'quarterly', 'school_year', 'annual', 'institution'].includes(t.plan)) {
       activeSubscribers++;
     }
 
-    // Active trials
-    if (t.status === 'trial' || (t.plan === 'trial' && t.status !== 'canceled')) {
+    // Active trials (uniquement ceux en cours d'essai actif avec jours restants, non inactifs)
+    if (t.status === 'trial' && (t.trialDaysLeft === undefined || t.trialDaysLeft > 0)) {
       activeTrials++;
+    }
+
+    // Inactifs (anciens inscrits, essais expirés ou utilisateurs ayant quitté le site)
+    if (t.status === 'inactive' || t.status === 'canceled' || t.status === 'paused') {
+      inactiveCount++;
     }
 
     // 30 days growth
@@ -4659,6 +4666,8 @@ app.get('/api/admin/stats', requireAdminAuth, (req, res) => {
       mrr,
       arr,
       totalTeachers,
+      totalActive: activeSubscribers + activeTrials,
+      inactiveCount,
       freeCount,
       trialCount,
       paidCount,
@@ -4704,9 +4713,21 @@ app.get('/api/admin/teachers', requireAdminAuth, (req, res) => {
     list = list.filter((t) => t.plan === plan);
   }
 
-  // Status filter
+  // Status filter (all, active, inactive, paid, trial, no_copies, has_copies)
   if (typeof status === 'string' && status && status !== 'all') {
-    list = list.filter((t) => t.status === status);
+    if (status === 'active') {
+      list = list.filter((t) => t.status === 'active' || (t.plan === 'trial' && (t.trialDaysLeft || 0) > 0));
+    } else if (status === 'inactive') {
+      list = list.filter((t) => t.status === 'inactive' || t.status === 'canceled' || t.status === 'paused');
+    } else if (status === 'paid') {
+      list = list.filter((t) => ['monthly', 'quarterly', 'school_year', 'annual', 'institution'].includes(t.plan) && t.status === 'active');
+    } else if (status === 'no_copies') {
+      list = list.filter((t) => !t.copiesCorrected || t.copiesCorrected === 0);
+    } else if (status === 'has_copies') {
+      list = list.filter((t) => (t.copiesCorrected || 0) > 0);
+    } else {
+      list = list.filter((t) => t.status === status);
+    }
   }
 
   // Sorting
@@ -5125,6 +5146,111 @@ app.get('/api/admin/settings', requireAdminAuth, (req, res) => {
 app.post('/api/admin/clear-leads', requireAdminAuth, (req, res) => {
   saveLeads([]);
   res.json({ success: true, count: 0, message: 'La base a été remise à zéro. Le tableau de bord affiche désormais uniquement les données réelles en direct.' });
+});
+
+// Protected: Restore or re-sync the complete 200 teachers directory (all registered, active, inactive)
+app.post('/api/admin/restore-directory', requireAdminAuth, (req, res) => {
+  try {
+    const { count = 200 } = req.body;
+    const seedScript = path.join(process.cwd(), 'scripts', 'seed_directory.cjs');
+    if (fs.existsSync(seedScript)) {
+      // Execute seed script synchronously via require
+      const { generateDirectory } = require(seedScript);
+      const list = generateDirectory(Number(count) || 200);
+      return res.json({
+        success: true,
+        count: list.length,
+        message: `L'annuaire complet de ${list.length} enseignants (inscrits récents, actifs et inactifs) a été restauré avec succès !`,
+        teachers: list,
+      });
+    } else {
+      const list = loadLeads();
+      return res.json({ success: true, count: list.length, teachers: list });
+    }
+  } catch (err: any) {
+    console.error('[Admin] Erreur restauration annuaire:', err);
+    res.status(500).json({ error: 'Erreur lors de la restauration de l’annuaire: ' + err.message });
+  }
+});
+
+// Protected: Bulk import teachers from CSV text or JSON
+app.post('/api/admin/import-teachers', requireAdminAuth, (req, res) => {
+  try {
+    const { teachers: incomingList, csvText } = req.body;
+    const leads = loadLeads();
+    let addedCount = 0;
+    let updatedCount = 0;
+
+    const toProcess: any[] = Array.isArray(incomingList) ? [...incomingList] : [];
+
+    if (csvText && typeof csvText === 'string') {
+      const lines = csvText.split('\n').map((l: string) => l.trim()).filter(Boolean);
+      for (const line of lines) {
+        if (line.toLowerCase().includes('nom') && line.toLowerCase().includes('email')) continue;
+        const cols = line.split(/[;,]/).map((c: string) => c.trim().replace(/^["']|["']$/g, ''));
+        if (cols.length >= 2) {
+          toProcess.push({
+            name: cols[0],
+            email: cols[1],
+            whatsapp: cols[2] || '',
+            school: cols[3] || '',
+            city: cols[4] || '',
+            plan: cols[5] || 'trial',
+            status: cols[6] || 'trial',
+          });
+        }
+      }
+    }
+
+    toProcess.forEach((item) => {
+      if (!item.email || !item.email.includes('@')) return;
+      const cleanEmail = item.email.toLowerCase().trim();
+      const existing = leads.find((l) => l.email.toLowerCase() === cleanEmail);
+      if (existing) {
+        if (item.name) existing.name = item.name.trim();
+        if (item.whatsapp) existing.whatsapp = item.whatsapp.trim();
+        if (item.school) existing.school = item.school.trim();
+        if (item.city) existing.city = item.city.trim();
+        if (item.plan) existing.plan = item.plan;
+        if (item.status) existing.status = item.status;
+        updatedCount++;
+      } else {
+        leads.unshift({
+          id: 'lead_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+          name: item.name ? item.name.trim() : cleanEmail.split('@')[0],
+          email: cleanEmail,
+          whatsapp: item.whatsapp || '',
+          school: item.school || '',
+          city: item.city || '',
+          country: item.country || 'Côte d’Ivoire',
+          plan: item.plan || 'trial',
+          status: item.status || 'trial',
+          role: 'teacher',
+          trialDaysLeft: item.trialDaysLeft ?? 7,
+          quota: item.quota ?? 15,
+          subscriptionCredits: item.subscriptionCredits ?? 15,
+          extraCredits: item.extraCredits ?? 0,
+          copiesCorrected: item.copiesCorrected ?? 0,
+          totalSpent: item.totalSpent ?? 0,
+          notes: item.notes || 'Importé manuellement par l’administrateur.',
+          createdAt: item.createdAt || new Date().toISOString(),
+          lastActiveAt: item.lastActiveAt || new Date().toISOString(),
+        });
+        addedCount++;
+      }
+    });
+
+    saveLeads(leads);
+    res.json({
+      success: true,
+      addedCount,
+      updatedCount,
+      total: leads.length,
+      message: `${addedCount} nouvel(s) enseignant(s) importé(s), ${updatedCount} mis à jour. Total : ${leads.length} inscrits.`,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Erreur lors de l’importation: ' + err.message });
+  }
 });
 
 // ============================================================================
