@@ -28,7 +28,7 @@ if (
 }
 
 const app = express();
-const PORT = 3000;
+const PORT = Number(process.env.PORT) || 3000;
 
 // Support large payload for high-resolution scanned copies (up to 50MB) + rawBody for Paystack webhook HMAC verification
 app.use(
