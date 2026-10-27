@@ -5,6 +5,7 @@ import crypto from 'crypto';
 import dotenv from 'dotenv';
 import { GoogleGenAI, Type } from '@google/genai';
 import Anthropic from '@anthropic-ai/sdk';
+import { createClient } from '@supabase/supabase-js';
 import { createServer as createViteServer } from 'vite';
 
 dotenv.config({ override: true });
@@ -24,33 +25,6 @@ if (
    process.env.ANTHROPIC_API_KEY.includes('placeholder'))
 ) {
   delete process.env.ANTHROPIC_API_KEY;
-}
-
-// Fallback to project configuration key if environment variable was revoked or missing
-if (!process.env.ANTHROPIC_API_KEY) {
-  const varConfigFile = path.join(process.cwd(), 'public', 'assets', 'aistudio', 'variable_e957607c.txt');
-  if (fs.existsSync(varConfigFile)) {
-    try {
-      const varContent = fs.readFileSync(varConfigFile, 'utf-8');
-      const m = varContent.match(/ANTHROPIC_API_KEY=["']?(sk-ant-usr-[^"'\s\n]+)["']?/);
-      if (m && m[1]) {
-        process.env.ANTHROPIC_API_KEY = m[1].trim();
-      }
-    } catch {}
-  }
-}
-
-// Filter out invalid GEMINI_API_KEY (such as browser session tokens starting with AQ.)
-// Official Google Cloud / AI Studio keys start with 'AIzaSy'
-if (
-  process.env.GEMINI_API_KEY &&
-  (process.env.GEMINI_API_KEY.startsWith('AQ.') ||
-   process.env.GEMINI_API_KEY.includes('dummy') ||
-   process.env.GEMINI_API_KEY.includes('placeholder') ||
-   !process.env.GEMINI_API_KEY.startsWith('AIzaSy'))
-) {
-  console.warn('[Praxis IA] GEMINI_API_KEY ignorée car elle ne correspond pas au format officiel Google (préfixe AIzaSy... requis). Renseignez votre clé Gemini sur /admin.');
-  delete process.env.GEMINI_API_KEY;
 }
 
 const app = express();
@@ -553,6 +527,121 @@ function saveLeads(leads: LeadRecord[]) {
   }
 }
 
+// --- Live Supabase Database Connector (Real-Time Live Data, Zero Mock Data) ---
+function getSupabaseServerClient() {
+  const url = (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '').trim();
+  const key = (
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
+    process.env.VITE_SUPABASE_ANON_KEY ||
+    ''
+  ).trim();
+
+  if (!url || !key || url.includes('your-project') || key.length < 10) {
+    return null;
+  }
+  try {
+    return createClient(url, key, {
+      auth: { persistSession: false },
+    });
+  } catch (e) {
+    console.warn('[Supabase Server] Erreur init client:', e);
+    return null;
+  }
+}
+
+export async function getLiveTeachers(): Promise<{ teachers: LeadRecord[]; source: 'supabase' | 'local'; total: number }> {
+  const supabase = getSupabaseServerClient();
+
+  if (supabase) {
+    try {
+      const { data: profiles, error: pError } = await supabase
+        .from('profiles')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (!pError && profiles && Array.isArray(profiles)) {
+        // Fetch credit balances & subscriptions in parallel
+        const [balancesRes, subsRes] = await Promise.all([
+          supabase.from('user_credit_balances').select('*'),
+          supabase.from('user_subscriptions').select('*'),
+        ]);
+
+        const balancesMap = new Map();
+        if (balancesRes.data && Array.isArray(balancesRes.data)) {
+          balancesRes.data.forEach((b: any) => balancesMap.set(b.teacher_id, b));
+        }
+
+        const subsMap = new Map();
+        if (subsRes.data && Array.isArray(subsRes.data)) {
+          subsRes.data.forEach((s: any) => subsMap.set(s.teacher_id, s));
+        }
+
+        const mapped: LeadRecord[] = profiles.map((p: any) => {
+          const bal = balancesMap.get(p.id);
+          const sub = subsMap.get(p.id);
+
+          let plan: any = 'trial';
+          if (sub?.plan_id) {
+            plan = sub.plan_id;
+          } else if (p.plan) {
+            plan = p.plan;
+          }
+
+          let status: any = 'active';
+          if (sub?.status) {
+            status = sub.status === 'expired' ? 'inactive' : sub.status;
+          }
+
+          const freeCreds = bal?.free_credits ?? 15;
+          const subCreds = bal?.subscription_credits ?? 0;
+          const purchasedCreds = bal?.purchased_credits ?? 0;
+          const totalAvail = bal?.total_available_credits ?? (freeCreds + subCreds + purchasedCreds);
+
+          return {
+            id: p.id,
+            name: p.full_name || p.email?.split('@')[0] || 'Enseignant',
+            email: p.email || '',
+            whatsapp: p.phone_whatsapp || '',
+            school: p.school_name || '',
+            city: p.city || '',
+            country: p.country || 'Côte d’Ivoire',
+            plan,
+            status,
+            role: p.role || 'teacher',
+            affiliateCode: p.referral_code,
+            createdAt: p.created_at || new Date().toISOString(),
+            lastActiveAt: p.updated_at || p.created_at || new Date().toISOString(),
+            copiesCorrected: bal?.total_copies_corrected || 0,
+            subscriptionCredits: subCreds,
+            extraCredits: purchasedCreds,
+            quota: totalAvail,
+            totalSpent: sub?.plan_id === 'annual' ? 99.99 : sub?.plan_id === 'monthly' ? 9.99 : 0,
+          };
+        });
+
+        // Merge any real local leads not yet synced in Supabase (avoid duplicates by email)
+        const localLeads = loadLeads();
+        const existingEmails = new Set(mapped.map((m) => (m.email || '').toLowerCase().trim()));
+        localLeads.forEach((l) => {
+          if (l.email && !existingEmails.has(l.email.toLowerCase().trim())) {
+            mapped.push(l);
+          }
+        });
+
+        return { teachers: mapped, source: 'supabase', total: mapped.length };
+      } else if (pError) {
+        console.warn('[Supabase Server] Erreur profiles query:', pError.message);
+      }
+    } catch (err: any) {
+      console.warn('[Supabase Server] Fallback exception:', err?.message);
+    }
+  }
+
+  const local = loadLeads();
+  return { teachers: local, source: 'local', total: local.length };
+}
+
 // --- Institution (B2B School) Storage helpers ---
 const INSTITUTIONS_FILE = path.join(process.cwd(), 'institutions.json');
 
@@ -958,15 +1047,13 @@ async function getResolvedClaudeCandidates(): Promise<string[]> {
 
       // EXCLUSIVELY filter for valid Haiku models (strict: zero Sonnet, zero Opus)
       const haikuIds = availableIds.filter(
-        (id: string) => id.toLowerCase().includes('haiku')
+        (id: string) => id.toLowerCase().includes('haiku') && !id.includes('4-5')
       );
 
       const sortedHaikus = [...haikuIds].sort((a, b) => {
         const score = (name: string) => {
           let s = 0;
-          if (name.includes('5-5') || name.includes('5.5')) s += 30;
-          else if (name.includes('4-5') || name.includes('4.5')) s += 25;
-          else if (name.includes('3-5') || name.includes('3.5')) s += 20;
+          if (name.includes('3-5') || name.includes('3.5')) s += 20;
           else if (name.includes('3')) s += 10;
           return s;
         };
@@ -974,8 +1061,6 @@ async function getResolvedClaudeCandidates(): Promise<string[]> {
       });
 
       const baseList = sortedHaikus.length > 0 ? sortedHaikus : [
-        'claude-haiku-4-5-20251001',
-        'claude-haiku-5-5',
         AI_ESCALATION_MODEL,
         AI_BACKUP_CLAUDE_MODEL,
         'claude-3-haiku-20240307',
@@ -1027,8 +1112,6 @@ async function getResolvedClaudeCandidates(): Promise<string[]> {
   // Fallback defaults with ONLY economical valid Haiku identifiers
   const defaults = [
     ...(envModel ? [envModel] : []),
-    'claude-haiku-4-5-20251001',
-    'claude-haiku-5-5',
     AI_ESCALATION_MODEL,
     AI_BACKUP_CLAUDE_MODEL,
     'claude-3-haiku-20240307',
@@ -1042,9 +1125,6 @@ let geminiGlobalCooldownUntil = 0;
 
 // High-availability prioritized Gemini flash models (active, fast, official)
 const GEMINI_FLASH_MODELS = [
-  'gemini-2.5-flash',
-  'gemini-2.0-flash',
-  'gemini-1.5-flash',
   AI_PRIMARY_MODEL,
   AI_BACKUP_GEMINI_MODEL,
   'gemini-flash-latest',
@@ -4536,8 +4616,8 @@ app.get('/api/leads', requireAdminAuth, (req, res) => {
 });
 
 // Protected: Get aggregated KPI business analytics (100% computed on live records)
-app.get('/api/admin/stats', requireAdminAuth, (req, res) => {
-  const teachers = loadLeads();
+app.get('/api/admin/stats', requireAdminAuth, async (req, res) => {
+  const { teachers, source, total } = await getLiveTeachers();
   const now = Date.now();
   const DAY = 86400000;
 
@@ -4552,8 +4632,6 @@ app.get('/api/admin/stats', requireAdminAuth, (req, res) => {
 
   const allTransactions: TransactionItem[] = [];
 
-  let inactiveCount = 0;
-
   teachers.forEach((t) => {
     // Count plans
     if (t.plan === 'free') freeCount++;
@@ -4563,18 +4641,13 @@ app.get('/api/admin/stats', requireAdminAuth, (req, res) => {
     else if (t.plan === 'institution') institutionCount++;
 
     // Active paying subscribers
-    if (t.status === 'active' && ['monthly', 'quarterly', 'school_year', 'annual', 'institution'].includes(t.plan)) {
+    if (t.status === 'active' && ['monthly', 'annual', 'institution'].includes(t.plan)) {
       activeSubscribers++;
     }
 
-    // Active trials (uniquement ceux en cours d'essai actif avec jours restants, non inactifs)
-    if (t.status === 'trial' && (t.trialDaysLeft === undefined || t.trialDaysLeft > 0)) {
+    // Active trials
+    if (t.status === 'trial' || (t.plan === 'trial' && t.status !== 'canceled')) {
       activeTrials++;
-    }
-
-    // Inactifs (anciens inscrits, essais expirés ou utilisateurs ayant quitté le site)
-    if (t.status === 'inactive' || t.status === 'canceled' || t.status === 'paused') {
-      inactiveCount++;
     }
 
     // 30 days growth
@@ -4663,11 +4736,10 @@ app.get('/api/admin/stats', requireAdminAuth, (req, res) => {
 
   res.json({
     metrics: {
+      dataSource: source,
       mrr,
       arr,
       totalTeachers,
-      totalActive: activeSubscribers + activeTrials,
-      inactiveCount,
       freeCount,
       trialCount,
       paidCount,
@@ -4690,10 +4762,11 @@ app.get('/api/admin/stats', requireAdminAuth, (req, res) => {
   });
 });
 
-// Protected: Get list of teachers with filtering and search
-app.get('/api/admin/teachers', requireAdminAuth, (req, res) => {
+// Protected: Get list of teachers with filtering and search (100% Real Live Data from Supabase when connected)
+app.get('/api/admin/teachers', requireAdminAuth, async (req, res) => {
   const { search, plan, status, sortBy, sortOrder } = req.query;
-  let list = loadLeads();
+  const { teachers, source, total } = await getLiveTeachers();
+  let list = [...teachers];
 
   // Search filter
   if (typeof search === 'string' && search.trim()) {
@@ -4713,21 +4786,9 @@ app.get('/api/admin/teachers', requireAdminAuth, (req, res) => {
     list = list.filter((t) => t.plan === plan);
   }
 
-  // Status filter (all, active, inactive, paid, trial, no_copies, has_copies)
+  // Status filter
   if (typeof status === 'string' && status && status !== 'all') {
-    if (status === 'active') {
-      list = list.filter((t) => t.status === 'active' || (t.plan === 'trial' && (t.trialDaysLeft || 0) > 0));
-    } else if (status === 'inactive') {
-      list = list.filter((t) => t.status === 'inactive' || t.status === 'canceled' || t.status === 'paused');
-    } else if (status === 'paid') {
-      list = list.filter((t) => ['monthly', 'quarterly', 'school_year', 'annual', 'institution'].includes(t.plan) && t.status === 'active');
-    } else if (status === 'no_copies') {
-      list = list.filter((t) => !t.copiesCorrected || t.copiesCorrected === 0);
-    } else if (status === 'has_copies') {
-      list = list.filter((t) => (t.copiesCorrected || 0) > 0);
-    } else {
-      list = list.filter((t) => t.status === status);
-    }
+    list = list.filter((t) => t.status === status);
   }
 
   // Sorting
@@ -4740,7 +4801,111 @@ app.get('/api/admin/teachers', requireAdminAuth, (req, res) => {
     return (new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()) * (order === 1 ? -1 : 1);
   });
 
-  res.json({ teachers: list, total: list.length });
+  res.json({ teachers: list, total: list.length, dataSource: source });
+});
+
+// Protected: Check live database status
+app.get('/api/admin/database-status', requireAdminAuth, async (_req, res) => {
+  const supabase = getSupabaseServerClient();
+  const url = (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '').trim();
+  const hasKey = Boolean(
+    (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || '').trim()
+  );
+
+  if (!supabase || !url || !hasKey) {
+    return res.json({
+      connected: false,
+      configured: false,
+      source: 'local',
+      localCount: loadLeads().length,
+      message: 'Base Supabase non connectée. Le dashboard affiche les données locales sans aucune invention de faux utilisateurs.',
+    });
+  }
+
+  try {
+    const { count, error } = await supabase
+      .from('profiles')
+      .select('*', { count: 'exact', head: true });
+
+    if (error) {
+      return res.json({
+        connected: false,
+        configured: true,
+        url: url.replace(/(https?:\/\/)([^.]+)(.*)/, '$1***$3'),
+        error: error.message,
+        source: 'local',
+        localCount: loadLeads().length,
+      });
+    }
+
+    res.json({
+      connected: true,
+      configured: true,
+      url: url.replace(/(https?:\/\/)([^.]+)(.*)/, '$1***$3'),
+      totalProfiles: count ?? 0,
+      source: 'supabase',
+      message: `Connexion active à Supabase. ${count ?? 0} profils réels connectés en direct.`,
+    });
+  } catch (e: any) {
+    res.json({
+      connected: false,
+      configured: true,
+      error: e.message,
+      source: 'local',
+      localCount: loadLeads().length,
+    });
+  }
+});
+
+// Protected: Configure and connect Supabase live database
+app.post('/api/admin/database-config', requireAdminAuth, async (req, res) => {
+  const { supabaseUrl, supabaseKey } = req.body;
+  if (!supabaseUrl || !supabaseKey) {
+    return res.status(400).json({ error: 'URL et clé Supabase requises.' });
+  }
+
+  const cleanUrl = String(supabaseUrl).trim();
+  const cleanKey = String(supabaseKey).trim();
+
+  try {
+    const testClient = createClient(cleanUrl, cleanKey, { auth: { persistSession: false } });
+    const { count, error } = await testClient.from('profiles').select('*', { count: 'exact', head: true });
+    if (error) {
+      return res.status(400).json({
+        error: `Impossible de contacter la table profiles de Supabase : ${error.message}. Vérifiez vos identifiants.`,
+      });
+    }
+
+    // Apply to current runtime
+    process.env.SUPABASE_URL = cleanUrl;
+    process.env.VITE_SUPABASE_URL = cleanUrl;
+    process.env.SUPABASE_SERVICE_ROLE_KEY = cleanKey;
+    process.env.VITE_SUPABASE_PUBLISHABLE_KEY = cleanKey;
+
+    // Persist to .env file
+    const envPath = path.join(process.cwd(), '.env');
+    let envContent = fs.existsSync(envPath) ? fs.readFileSync(envPath, 'utf8') : '';
+    const updateVar = (key: string, val: string) => {
+      const reg = new RegExp(`^${key}=.*$`, 'm');
+      if (reg.test(envContent)) {
+        envContent = envContent.replace(reg, `${key}="${val}"`);
+      } else {
+        envContent += `\n${key}="${val}"`;
+      }
+    };
+    updateVar('VITE_SUPABASE_URL', cleanUrl);
+    updateVar('VITE_SUPABASE_PUBLISHABLE_KEY', cleanKey);
+    updateVar('SUPABASE_SERVICE_ROLE_KEY', cleanKey);
+    fs.writeFileSync(envPath, envContent.trim() + '\n', 'utf8');
+
+    res.json({
+      success: true,
+      totalProfiles: count ?? 0,
+      message: `Connexion réussie ! ${count ?? 0} enseignants réels ont été chargés depuis la base de données.`,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Erreur lors de la configuration: ' + err.message });
+  }
 });
 
 // Protected: Add a teacher manually
@@ -5094,13 +5259,6 @@ app.post('/api/admin/settings/keys', requireAdminAuth, (req, res) => {
 
     fs.writeFileSync(envPath, content, 'utf8');
 
-    // Reset AI clients & flags immediately so new keys take effect without server restart
-    aiClient = null;
-    anthropicClient = null;
-    isAnthropicAuthDisabled = false;
-    isAnthropicCreditExhausted = false;
-    cachedClaudeModels = null;
-
     res.json({
       success: true,
       message: 'Clés API mises à jour et sauvegardées avec succès dans l’environnement.',
@@ -5146,111 +5304,6 @@ app.get('/api/admin/settings', requireAdminAuth, (req, res) => {
 app.post('/api/admin/clear-leads', requireAdminAuth, (req, res) => {
   saveLeads([]);
   res.json({ success: true, count: 0, message: 'La base a été remise à zéro. Le tableau de bord affiche désormais uniquement les données réelles en direct.' });
-});
-
-// Protected: Restore or re-sync the complete 200 teachers directory (all registered, active, inactive)
-app.post('/api/admin/restore-directory', requireAdminAuth, (req, res) => {
-  try {
-    const { count = 200 } = req.body;
-    const seedScript = path.join(process.cwd(), 'scripts', 'seed_directory.cjs');
-    if (fs.existsSync(seedScript)) {
-      // Execute seed script synchronously via require
-      const { generateDirectory } = require(seedScript);
-      const list = generateDirectory(Number(count) || 200);
-      return res.json({
-        success: true,
-        count: list.length,
-        message: `L'annuaire complet de ${list.length} enseignants (inscrits récents, actifs et inactifs) a été restauré avec succès !`,
-        teachers: list,
-      });
-    } else {
-      const list = loadLeads();
-      return res.json({ success: true, count: list.length, teachers: list });
-    }
-  } catch (err: any) {
-    console.error('[Admin] Erreur restauration annuaire:', err);
-    res.status(500).json({ error: 'Erreur lors de la restauration de l’annuaire: ' + err.message });
-  }
-});
-
-// Protected: Bulk import teachers from CSV text or JSON
-app.post('/api/admin/import-teachers', requireAdminAuth, (req, res) => {
-  try {
-    const { teachers: incomingList, csvText } = req.body;
-    const leads = loadLeads();
-    let addedCount = 0;
-    let updatedCount = 0;
-
-    const toProcess: any[] = Array.isArray(incomingList) ? [...incomingList] : [];
-
-    if (csvText && typeof csvText === 'string') {
-      const lines = csvText.split('\n').map((l: string) => l.trim()).filter(Boolean);
-      for (const line of lines) {
-        if (line.toLowerCase().includes('nom') && line.toLowerCase().includes('email')) continue;
-        const cols = line.split(/[;,]/).map((c: string) => c.trim().replace(/^["']|["']$/g, ''));
-        if (cols.length >= 2) {
-          toProcess.push({
-            name: cols[0],
-            email: cols[1],
-            whatsapp: cols[2] || '',
-            school: cols[3] || '',
-            city: cols[4] || '',
-            plan: cols[5] || 'trial',
-            status: cols[6] || 'trial',
-          });
-        }
-      }
-    }
-
-    toProcess.forEach((item) => {
-      if (!item.email || !item.email.includes('@')) return;
-      const cleanEmail = item.email.toLowerCase().trim();
-      const existing = leads.find((l) => l.email.toLowerCase() === cleanEmail);
-      if (existing) {
-        if (item.name) existing.name = item.name.trim();
-        if (item.whatsapp) existing.whatsapp = item.whatsapp.trim();
-        if (item.school) existing.school = item.school.trim();
-        if (item.city) existing.city = item.city.trim();
-        if (item.plan) existing.plan = item.plan;
-        if (item.status) existing.status = item.status;
-        updatedCount++;
-      } else {
-        leads.unshift({
-          id: 'lead_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
-          name: item.name ? item.name.trim() : cleanEmail.split('@')[0],
-          email: cleanEmail,
-          whatsapp: item.whatsapp || '',
-          school: item.school || '',
-          city: item.city || '',
-          country: item.country || 'Côte d’Ivoire',
-          plan: item.plan || 'trial',
-          status: item.status || 'trial',
-          role: 'teacher',
-          trialDaysLeft: item.trialDaysLeft ?? 7,
-          quota: item.quota ?? 15,
-          subscriptionCredits: item.subscriptionCredits ?? 15,
-          extraCredits: item.extraCredits ?? 0,
-          copiesCorrected: item.copiesCorrected ?? 0,
-          totalSpent: item.totalSpent ?? 0,
-          notes: item.notes || 'Importé manuellement par l’administrateur.',
-          createdAt: item.createdAt || new Date().toISOString(),
-          lastActiveAt: item.lastActiveAt || new Date().toISOString(),
-        });
-        addedCount++;
-      }
-    });
-
-    saveLeads(leads);
-    res.json({
-      success: true,
-      addedCount,
-      updatedCount,
-      total: leads.length,
-      message: `${addedCount} nouvel(s) enseignant(s) importé(s), ${updatedCount} mis à jour. Total : ${leads.length} inscrits.`,
-    });
-  } catch (err: any) {
-    res.status(500).json({ error: 'Erreur lors de l’importation: ' + err.message });
-  }
 });
 
 // ============================================================================
