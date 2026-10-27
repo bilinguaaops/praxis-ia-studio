@@ -16,6 +16,16 @@ dotenv.config({ override: true });
   }
 });
 
+// Filter out known revoked/expired test keys to prevent noisy 401 attempts
+if (
+  process.env.ANTHROPIC_API_KEY &&
+  (process.env.ANTHROPIC_API_KEY.startsWith('sk-ant-api03-xYMOYO2') ||
+   process.env.ANTHROPIC_API_KEY.includes('dummy') ||
+   process.env.ANTHROPIC_API_KEY.includes('placeholder'))
+) {
+  delete process.env.ANTHROPIC_API_KEY;
+}
+
 const app = express();
 const PORT = 3000;
 
@@ -679,13 +689,32 @@ function getGenAI(): GoogleGenAI {
 
 // Lazy Anthropic Claude initialization
 let anthropicClient: Anthropic | null = null;
+let isAnthropicAuthDisabled = false;
+let isAnthropicCreditExhausted = false;
+
+function hasValidAnthropicKey(): boolean {
+  if (isAnthropicAuthDisabled || isAnthropicCreditExhausted) return false;
+  const key = process.env.ANTHROPIC_API_KEY;
+  if (!key) return false;
+  const trimmed = key.trim();
+  if (trimmed.length < 20 || trimmed.includes('placeholder') || trimmed.includes('dummy')) {
+    return false;
+  }
+  return true;
+}
+
 function getAnthropic(): Anthropic | null {
-  const anthropicKey = process.env.ANTHROPIC_API_KEY;
-  if (!anthropicKey) return null;
+  if (!hasValidAnthropicKey()) return null;
+  const anthropicKey = process.env.ANTHROPIC_API_KEY!.trim();
   if (!anthropicClient) {
-    anthropicClient = new Anthropic({
-      apiKey: anthropicKey,
-    });
+    try {
+      anthropicClient = new Anthropic({
+        apiKey: anthropicKey,
+      });
+    } catch {
+      isAnthropicAuthDisabled = true;
+      return null;
+    }
   }
   return anthropicClient;
 }
@@ -882,6 +911,7 @@ function extractExercisesFromRubric(rubricText: string): { title: string; maxPoi
 }
 
 async function getResolvedClaudeCandidates(): Promise<string[]> {
+  if (!hasValidAnthropicKey()) return [];
   const anthropic = getAnthropic();
   if (!anthropic) return [];
 
@@ -924,12 +954,43 @@ async function getResolvedClaudeCandidates(): Promise<string[]> {
         ? Array.from(new Set([envModel, ...baseList]))
         : baseList;
 
-      console.log('[Praxis IA] Modèles Anthropic exclusifs Haiku (économiques) :', finalList);
       cachedClaudeModels = { models: finalList, fetchedAt: Date.now() };
       return finalList;
     }
   } catch (err: any) {
-    console.warn('[Praxis IA] Découverte dynamique Anthropic non disponible :', err?.message);
+    const status = err?.status || err?.statusCode;
+    const msg = (err?.message || String(err)).toLowerCase();
+    const isAuthFail =
+      status === 401 ||
+      status === 403 ||
+      msg.includes('401') ||
+      msg.includes('authentication_error') ||
+      msg.includes('invalid x-api-key') ||
+      msg.includes('api_key');
+
+    if (isAuthFail) {
+      isAnthropicAuthDisabled = true;
+      anthropicClient = null;
+      cachedClaudeModels = { models: [], fetchedAt: Date.now() + 86400_000 };
+      console.log('[Praxis IA] Authentification Anthropic non disponible. Utilisation standard de Google Gemini.');
+      return [];
+    }
+
+    const isCreditFail =
+      status === 402 ||
+      msg.includes('credit balance') ||
+      msg.includes('insufficient_quota');
+
+    if (isCreditFail) {
+      isAnthropicCreditExhausted = true;
+      anthropicClient = null;
+      cachedClaudeModels = { models: [], fetchedAt: Date.now() + 86400_000 };
+      console.log('[Praxis IA] Solde crédits Anthropic insuffisant. Utilisation de Google Gemini.');
+      return [];
+    }
+
+    cachedClaudeModels = { models: [], fetchedAt: Date.now() + 300_000 };
+    return [];
   }
 
   // Fallback defaults with ONLY economical valid Haiku identifiers
@@ -941,8 +1002,6 @@ async function getResolvedClaudeCandidates(): Promise<string[]> {
   ];
   return Array.from(new Set(defaults));
 }
-
-let isAnthropicCreditExhausted = false;
 
 // In-memory model circuit breaker to avoid repeatedly hammering models with 503/timeout
 const modelCooldownMap = new Map<string, number>();
@@ -1007,15 +1066,16 @@ function getPrioritizedModels(candidates: string[]): string[] {
 // Health check endpoint
 app.get('/api/health', async (req, res) => {
   const claudeModels = await getResolvedClaudeCandidates();
+  const hasClaude = claudeModels.length > 0;
   res.json({
     status: 'ok',
     hasKey: Boolean(process.env.GEMINI_API_KEY),
-    hasAnthropicKey: Boolean(process.env.ANTHROPIC_API_KEY),
+    hasAnthropicKey: hasClaude,
     claudeModel: claudeModels[0] || null,
     claudeAvailableModels: claudeModels.slice(0, 4),
     activeProviders: [
       process.env.GEMINI_API_KEY ? 'gemini flash' : null,
-      process.env.ANTHROPIC_API_KEY ? 'claude haiku (économique)' : null,
+      hasClaude ? 'claude haiku (économique)' : null,
     ].filter(Boolean),
     timestamp: new Date().toISOString(),
   });
@@ -1035,7 +1095,7 @@ app.post('/api/analyze-rubric', async (req, res) => {
     }
 
     const hasGeminiKey = Boolean(process.env.GEMINI_API_KEY);
-    const hasAnthropicKey = Boolean(process.env.ANTHROPIC_API_KEY);
+    const hasAnthropicKey = hasValidAnthropicKey();
 
     if (!hasGeminiKey && !hasAnthropicKey) {
       return res.status(500).json({
@@ -1122,9 +1182,11 @@ RÉPONDS UNIQUEMENT SOUS FORME D'UN OBJET JSON STRICT.`;
 
     // Helper: Run Claude Haiku (cost-effective)
     const runClaudeRubric = async () => {
+      if (!hasValidAnthropicKey()) return;
       const anthropic = getAnthropic();
       if (!anthropic) return;
       const candidates = await getResolvedClaudeCandidates();
+      if (candidates.length === 0) return;
       const healthy = candidates.filter((m) => isModelHealthy(m));
       const claudeCandidates = (healthy.length > 0 ? healthy : candidates).slice(0, 2);
       for (const chosenClaudeModel of claudeCandidates) {
@@ -1196,6 +1258,17 @@ RÉPONDS UNIQUEMENT SOUS FORME D'UN OBJET JSON STRICT.`;
             }
           }
         } catch (anthropicErr: any) {
+          const status = anthropicErr?.status || anthropicErr?.statusCode;
+          const msg = (anthropicErr?.message || String(anthropicErr)).toLowerCase();
+          if (status === 401 || status === 403 || msg.includes('authentication_error') || msg.includes('invalid x-api-key')) {
+            isAnthropicAuthDisabled = true;
+            anthropicClient = null;
+            break;
+          }
+          if (status === 402 || msg.includes('credit balance') || msg.includes('insufficient_quota')) {
+            isAnthropicCreditExhausted = true;
+            break;
+          }
           console.log(`[AnalyzeRubric] Claude (${chosenClaudeModel}) indisponible (${anthropicErr.message || 'erreur'}), tentative suivante...`);
           markModelUnhealthy(chosenClaudeModel, 120_000);
         }
@@ -1401,7 +1474,7 @@ app.post('/api/correct', async (req, res) => {
     }
 
     const hasGeminiKey = Boolean(process.env.GEMINI_API_KEY);
-    const hasAnthropicKey = Boolean(process.env.ANTHROPIC_API_KEY);
+    const hasAnthropicKey = hasValidAnthropicKey();
 
     if (!hasGeminiKey && !hasAnthropicKey) {
       return res.status(500).json({
@@ -1861,10 +1934,11 @@ Voici la copie de l'élève (${studentName || 'Nom à détecter'}). Compare chaq
     let usedModel: string = 'default';
 
     const tryClaude = async () => {
-      if (isAnthropicCreditExhausted) return;
+      if (!hasValidAnthropicKey() || isAnthropicCreditExhausted) return;
       const anthropic = getAnthropic();
       if (!anthropic) return;
       const candidates = await getResolvedClaudeCandidates();
+      if (candidates.length === 0) return;
       const healthy = candidates.filter((m) => isModelHealthy(m));
       const claudeCandidates = (healthy.length > 0 ? healthy : candidates).slice(0, 2);
       console.log(`[Praxis IA] Candidats Claude actifs à tester :`, claudeCandidates);
@@ -2002,14 +2076,21 @@ IMPORTANT : Ne pose AUCUNE question. Remplis directement le JSON avec les inform
             }
           }
         } catch (anthropicErr: any) {
-          const errMsg = anthropicErr?.message || String(anthropicErr);
-          const isLowCredit = errMsg.includes('credit balance is too low') || errMsg.includes('insufficient_quota');
+          const status = anthropicErr?.status || anthropicErr?.statusCode;
+          const errMsg = (anthropicErr?.message || String(anthropicErr)).toLowerCase();
+          const isAuthError = status === 401 || status === 403 || errMsg.includes('authentication_error') || errMsg.includes('invalid x-api-key');
+          if (isAuthError) {
+            isAnthropicAuthDisabled = true;
+            anthropicClient = null;
+            break;
+          }
+          const isLowCredit = status === 402 || errMsg.includes('credit balance is too low') || errMsg.includes('insufficient_quota');
           if (isLowCredit) {
-            console.warn('[Praxis IA] Solde crédits Anthropic insuffisant. Repli immédiat et exclusif sur Gemini Flash.');
+            console.log('[Praxis IA] Solde crédits Anthropic insuffisant. Repli immédiat sur Gemini Flash.');
             isAnthropicCreditExhausted = true;
             break;
           }
-          const isNotFound = anthropicErr?.status === 404 || anthropicErr?.message?.includes('not_found_error');
+          const isNotFound = status === 404 || errMsg.includes('not_found_error');
           console.log(`[Praxis IA] Claude (${chosenClaudeModel}) indisponible, bascule...`);
           markModelUnhealthy(chosenClaudeModel, 20_000);
           if (isNotFound) {

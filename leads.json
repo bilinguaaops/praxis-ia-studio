@@ -1,1 +1,15 @@
-[]
+[
+  {
+    "id": "lead_1793096728746",
+    "name": "bilingua.agency",
+    "email": "bilingua.agency@gmail.com",
+    "whatsapp": "",
+    "plan": "trial",
+    "quota": 30,
+    "subscriptionCredits": 30,
+    "extraCredits": 0,
+    "copiesCorrected": 0,
+    "status": "active",
+    "createdAt": "2026-10-27T10:25:28.746Z"
+  }
+]
