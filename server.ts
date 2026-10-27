@@ -23,15 +23,8 @@ dotenv.config({ override: true });
   }
 });
 
-// Filter out known revoked/expired test keys to prevent noisy 401 attempts
-if (
-  process.env.ANTHROPIC_API_KEY &&
-  (process.env.ANTHROPIC_API_KEY.startsWith('sk-ant-api03-xYMOYO2') ||
-   process.env.ANTHROPIC_API_KEY.includes('dummy') ||
-   process.env.ANTHROPIC_API_KEY.includes('placeholder'))
-) {
-  delete process.env.ANTHROPIC_API_KEY;
-}
+// Anthropic Claude API Key for High Availability & Gemini 503 Fallback
+const hasAnthropicEnvKey = Boolean(process.env.ANTHROPIC_API_KEY && process.env.ANTHROPIC_API_KEY.trim().length > 20);
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
@@ -850,10 +843,9 @@ let isAnthropicCreditExhausted = false;
 
 function hasValidAnthropicKey(): boolean {
   if (isAnthropicAuthDisabled || isAnthropicCreditExhausted) return false;
-  const key = process.env.ANTHROPIC_API_KEY;
+  const key = (process.env.ANTHROPIC_API_KEY || '').trim();
   if (!key) return false;
-  const trimmed = key.trim();
-  if (trimmed.length < 20 || trimmed.includes('placeholder') || trimmed.includes('dummy')) {
+  if (key.length < 20 || key.includes('placeholder') || key.includes('dummy')) {
     return false;
   }
   return true;
@@ -881,8 +873,8 @@ let cachedClaudeModels: { models: string[]; fetchedAt: number } | null = null;
 // --- Configurable Economical AI Models ---
 const AI_PRIMARY_MODEL = process.env.AI_PRIMARY_MODEL || 'gemini-3.1-flash-lite';
 const AI_BACKUP_GEMINI_MODEL = process.env.AI_BACKUP_GEMINI_MODEL || 'gemini-3.8-flash';
-const AI_ESCALATION_MODEL = process.env.AI_ESCALATION_MODEL || 'claude-3-5-haiku-latest';
-const AI_BACKUP_CLAUDE_MODEL = process.env.AI_BACKUP_CLAUDE_MODEL || 'claude-3-5-haiku-20241022';
+const AI_ESCALATION_MODEL = process.env.AI_ESCALATION_MODEL || 'claude-haiku-4-5-20251001';
+const AI_BACKUP_CLAUDE_MODEL = process.env.AI_BACKUP_CLAUDE_MODEL || 'claude-haiku-5-5';
 const AI_VERIFIER_MODEL = process.env.AI_VERIFIER_MODEL || 'gemini-3.1-flash-lite';
 const CORRECTION_PROMPT_VERSION = 'v2-secure';
 
@@ -1085,26 +1077,29 @@ async function getResolvedClaudeCandidates(): Promise<string[]> {
     if (res && Array.isArray(res.data) && res.data.length > 0) {
       const availableIds: string[] = res.data.map((m: any) => m.id);
 
-      // EXCLUSIVELY filter for valid Haiku models (strict: zero Sonnet, zero Opus)
+      // Filter and prioritize high-speed economic vision models (Haiku 4.5 / 5.5, Sonnet fallback)
       const haikuIds = availableIds.filter(
-        (id: string) => id.toLowerCase().includes('haiku') && !id.includes('4-5')
+        (id: string) => id.toLowerCase().includes('haiku')
       );
 
       const sortedHaikus = [...haikuIds].sort((a, b) => {
-        const score = (name: string) => {
-          let s = 0;
-          if (name.includes('3-5') || name.includes('3.5')) s += 20;
-          else if (name.includes('3')) s += 10;
-          return s;
-        };
-        return score(b) - score(a);
+        // Prioritize haiku-4-5 first (most stable for vision OCR), then haiku-5-5
+        if (a.includes('4-5') && !b.includes('4-5')) return -1;
+        if (!a.includes('4-5') && b.includes('4-5')) return 1;
+        return 0;
       });
 
-      const baseList = sortedHaikus.length > 0 ? sortedHaikus : [
-        AI_ESCALATION_MODEL,
-        AI_BACKUP_CLAUDE_MODEL,
-        'claude-3-haiku-20240307',
-      ];
+      const sonnetBackup = availableIds.filter(
+        (id: string) => id.includes('sonnet-4-5') || id.includes('sonnet-5')
+      );
+
+      const baseList = sortedHaikus.length > 0
+        ? [...sortedHaikus, ...sonnetBackup.slice(0, 1)]
+        : [
+            'claude-haiku-4-5-20251001',
+            'claude-haiku-5-5',
+            'claude-sonnet-4-5-20250929',
+          ];
 
       const finalList = envModel
         ? Array.from(new Set([envModel, ...baseList]))
@@ -2261,6 +2256,10 @@ IMPORTANT : Ne pose AUCUNE question. Remplis directement le JSON avec les inform
 
     const tryGemini = async () => {
       if (!hasGeminiKey) {
+        return;
+      }
+      if (!isGeminiAvailable() && hasAnthropicKey) {
+        console.log(`[Praxis IA] ⚡ Gemini temporairement en cooldown suite à une surcharge (503). Relais immédiat vers Claude Haiku.`);
         return;
       }
       const ai = getGenAI();

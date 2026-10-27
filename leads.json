@@ -11,5 +11,19 @@
     "copiesCorrected": 0,
     "status": "active",
     "createdAt": "2026-10-27T10:25:28.746Z"
+  },
+  {
+    "id": "lead_1793121921614",
+    "name": "professeur",
+    "email": "professeur@praxis.edu",
+    "whatsapp": "",
+    "plan": "trial",
+    "quota": 15,
+    "subscriptionCredits": 14,
+    "extraCredits": 0,
+    "copiesCorrected": 1,
+    "status": "active",
+    "createdAt": "2026-10-27T17:25:21.614Z",
+    "lastActiveAt": "2026-10-27T17:25:25.111Z"
   }
 ]
