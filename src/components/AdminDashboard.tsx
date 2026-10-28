@@ -2075,7 +2075,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToApp }) =
                       <th className="py-3.5 px-4">Forfait</th>
                       <th className="py-3.5 px-4">Statut</th>
                       <th className="py-3.5 px-4 cursor-pointer" onClick={() => { setSortBy('copies'); setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc'); }}>
-                        Copies Corrigées
+                        Crédits Utilisés / Solde
                       </th>
                       <th className="py-3.5 px-4 cursor-pointer" onClick={() => { setSortBy('date'); setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc'); }}>
                         Inscription
@@ -2170,20 +2170,32 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToApp }) =
                           {/* Status Badge */}
                           <td className="py-3.5 px-4">{renderStatusBadge(teacher.status, teacher)}</td>
 
-                          {/* Copies Progress */}
+                          {/* Crédits Utilisés & Solde */}
                           <td className="py-3.5 px-4">
-                            <div className="w-32">
-                              <div className="flex justify-between text-[11px] mb-1">
-                                <span className="text-white font-semibold">{teacher.copiesCorrected || 0}</span>
-                                <span className="text-slate-400">/ {teacher.quota || 100}</span>
+                            <div className="w-36">
+                              <div className="flex items-center justify-between text-[11px] mb-1">
+                                <span className={`font-bold ${(teacher.copiesCorrected || 0) > 0 ? 'text-amber-400' : 'text-slate-300'}`}>
+                                  {teacher.copiesCorrected || 0} utilisé{(teacher.copiesCorrected || 0) > 1 ? 's' : ''}
+                                </span>
+                                <span className="text-emerald-400 text-[10px] font-mono font-semibold">
+                                  {Math.max(0, (teacher.quota || 15) - (teacher.copiesCorrected || 0))} restant{(Math.max(0, (teacher.quota || 15) - (teacher.copiesCorrected || 0))) > 1 ? 's' : ''}
+                                </span>
                               </div>
                               <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
                                 <div
-                                  className="h-full bg-blue-500 rounded-full"
+                                  className={`h-full rounded-full transition-all ${
+                                    (teacher.copiesCorrected || 0) > 0
+                                      ? 'bg-gradient-to-r from-amber-500 to-emerald-500'
+                                      : 'bg-slate-700'
+                                  }`}
                                   style={{
-                                    width: `${Math.min(100, (((teacher.copiesCorrected || 0) / (teacher.quota || 100)) * 100))}%`,
+                                    width: `${Math.min(100, Math.max(0, (((teacher.copiesCorrected || 0) / Math.max(1, teacher.quota || 15)) * 100)))}%`,
                                   }}
                                 />
+                              </div>
+                              <div className="flex justify-between items-center text-[10px] text-slate-500 mt-0.5">
+                                <span>{teacher.copiesCorrected || 0} copie{(teacher.copiesCorrected || 0) > 1 ? 's' : ''}</span>
+                                <span>Quota total : {teacher.quota || 15}</span>
                               </div>
                             </div>
                           </td>
@@ -3189,11 +3201,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToApp }) =
                 </div>
               </div>
               <div className="bg-[#0B0F17] p-3 rounded-xl border border-slate-800">
-                <span className="text-slate-500 block mb-0.5">Usage Copies IA</span>
-                <span className="font-bold text-white text-sm">
-                  {selectedTeacherForDetail.copiesCorrected || 0} copies analysées
+                <span className="text-slate-500 block mb-0.5">Usage Crédits & Copies IA</span>
+                <span className="font-bold text-amber-400 text-sm block">
+                  {selectedTeacherForDetail.copiesCorrected || 0} crédit{(selectedTeacherForDetail.copiesCorrected || 0) > 1 ? 's' : ''} utilisé{(selectedTeacherForDetail.copiesCorrected || 0) > 1 ? 's' : ''} ({selectedTeacherForDetail.copiesCorrected || 0} copie{(selectedTeacherForDetail.copiesCorrected || 0) > 1 ? 's' : ''})
                 </span>
-                <span className="text-[11px] text-slate-400 block">Quota actuel : {selectedTeacherForDetail.quota || 15} copies</span>
+                <span className="text-[11px] text-emerald-400 font-semibold block mt-0.5">
+                  Solde restant : {Math.max(0, (selectedTeacherForDetail.quota || 15) - (selectedTeacherForDetail.copiesCorrected || 0))} crédits
+                </span>
+                <span className="text-[10px] text-slate-500 block">Quota total attribué : {selectedTeacherForDetail.quota || 15} crédits</span>
               </div>
               <div className="bg-[#0B0F17] p-3 rounded-xl border border-slate-800">
                 <span className="text-slate-500 block mb-0.5">Total Dépensé (LTV)</span>

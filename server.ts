@@ -7,6 +7,12 @@ import { GoogleGenAI, Type } from '@google/genai';
 import Anthropic from '@anthropic-ai/sdk';
 import { createServer as createViteServer } from 'vite';
 import { createClient } from '@supabase/supabase-js';
+import WebSocket from 'ws';
+
+// Polyfill WebSocket for Node runtime on Render / production
+if (!globalThis.WebSocket) {
+  (globalThis as any).WebSocket = WebSocket;
+}
 
 dotenv.config({ override: true });
 
@@ -5273,9 +5279,12 @@ app.post('/api/admin/import-teachers', requireAdminAuth, (req, res) => {
 // ⚡ SYNCHRONISATION SUPABASE DIRECTE (367+ UTILISATEURS / PROFILES)
 // ============================================================================
 
+const OFFICIAL_PRAXIS_SUPABASE_URL = 'https://chrtrfyynnbgxtysrzjo.supabase.co';
+const OFFICIAL_PRAXIS_SERVICE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNocnRyZnl5bm5iZ3h0eXNyempvIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc5MDc3NTExNCwiZXhwIjoyMTA2MzUxMTE0fQ.F-U0Kzt-RJQMvUEGkVWmKB8RThoav4JMAQ36A549sHQ';
+
 function getActiveSupabaseClient(customUrl?: string, customKey?: string) {
-  const url = (customUrl || process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '').trim();
-  const key = (customKey || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY || '').trim();
+  const url = (customUrl || process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || OFFICIAL_PRAXIS_SUPABASE_URL).trim();
+  const key = (customKey || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY || OFFICIAL_PRAXIS_SERVICE_KEY).trim();
   if (!url || !key || !url.startsWith('http')) return null;
   return { client: createClient(url, key, { auth: { persistSession: false } }), url, key };
 }
@@ -5440,8 +5449,9 @@ async function syncFromSupabase(client: any) {
 
     const freeCredits = b?.free_credits ?? 15;
     const copiesUsed = b?.total_copies_corrected ?? 0;
-    const subCredits = b?.subscription_credits ?? Math.max(0, freeCredits - copiesUsed);
     const extraCredits = b?.purchased_credits ?? 0;
+    const availableCredits = b?.total_available_credits ?? (freeCredits + (b?.subscription_credits ?? 0) + extraCredits);
+    const totalQuota = Math.max(15, copiesUsed + availableCredits);
     const plan = s?.plan_id || 'trial';
     const status = (s?.status === 'active' || p.role === 'admin' || (copiesUsed > 0 && copiesUsed < 15)) ? 'active' : 'inactive';
 
@@ -5456,8 +5466,8 @@ async function syncFromSupabase(client: any) {
         plan: leads[existingIdx].plan === 'institution' ? 'institution' : plan,
         status: leads[existingIdx].status === 'active' ? 'active' : status,
         copiesCorrected: copiesUsed || leads[existingIdx].copiesCorrected || 0,
-        quota: freeCredits + extraCredits,
-        subscriptionCredits: Math.max(0, subCredits),
+        quota: totalQuota,
+        subscriptionCredits: availableCredits,
         extraCredits,
       };
       updatedCount++;
@@ -5472,8 +5482,8 @@ async function syncFromSupabase(client: any) {
         plan,
         status,
         copiesCorrected: copiesUsed,
-        quota: freeCredits + extraCredits,
-        subscriptionCredits: Math.max(0, subCredits),
+        quota: totalQuota,
+        subscriptionCredits: availableCredits,
         extraCredits,
         totalSpent: plan === 'annual' ? 30000 : plan === 'monthly' ? 5000 : 0,
         notes: `Enseignant synchronisé depuis Supabase Cloud (${sourceNote || p.role || 'professeur'}).`,
@@ -7913,6 +7923,18 @@ async function startServer() {
 
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`[Praxis' IA] Serveur démarré avec succès sur http://0.0.0.0:${PORT}`);
+
+    // Synchronisation automatique de fond des 367+ enseignants Supabase
+    try {
+      const supa = getActiveSupabaseClient();
+      if (supa) {
+        syncFromSupabase(supa.client)
+          .then((res) => console.log(`[Praxis Supabase] Synchronisation de démarrage réussie : ${res.imported} nouveaux, ${res.updated} actualisés (Total: ${res.total})`))
+          .catch((err) => console.warn('[Praxis Supabase] Synchronisation différée :', err?.message || err));
+      }
+    } catch (e) {
+      // Ignorer pour ne pas bloquer le démarrage
+    }
   });
 }
 
