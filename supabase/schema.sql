@@ -51,7 +51,7 @@ CREATE INDEX IF NOT EXISTS idx_profiles_referral_code ON public.profiles(referra
 -- ----------------------------------------------------------------------------
 -- 3. PLANS D'ABONNEMENT ET PACKS DE CRÉDITS
 -- ----------------------------------------------------------------------------
--- Plans : free (30 crédits offerts), monthly (500), 3_months (1500), 9_months (4500)
+-- Plans : free (15 crédits offerts), monthly (500), 3_months (1500), 9_months (4500)
 CREATE TABLE IF NOT EXISTS public.plans (
     id TEXT PRIMARY KEY, -- 'free', 'monthly', '3_months', '9_months'
     name TEXT NOT NULL,
@@ -1390,7 +1390,7 @@ CREATE POLICY "storage_exports_owner" ON storage.objects
 -- A. Grille tarifaire officielle des forfaits
 INSERT INTO public.plans (id, name, duration_days, price_fcfa, included_credits, is_active)
 VALUES
-    ('free', 'Compte Découverte', 0, 0, 50, true),
+    ('free', 'Compte Découverte', 0, 0, 15, true),
     ('monthly', 'Abonnement Mensuel (1 mois)', 30, 5000, 500, true),
     ('3_months', 'Trimestriel (3 mois)', 90, 12000, 1500, true),
     ('9_months', 'Année Scolaire (9 mois)', 270, 30000, 4500, true)
