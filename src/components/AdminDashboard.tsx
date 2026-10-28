@@ -152,6 +152,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToApp }) =
     message: string;
     url?: string;
   } | null>(null);
+  const [supabaseModalError, setSupabaseModalError] = useState<string | null>(null);
+  const [supabaseModalSuccess, setSupabaseModalSuccess] = useState<string | null>(null);
 
   // New Teacher Form state
   const [newTeacherForm, setNewTeacherForm] = useState({
@@ -697,6 +699,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToApp }) =
 
   // Open Supabase Modal
   const handleOpenSupabaseModal = () => {
+    setSupabaseModalError(null);
+    setSupabaseModalSuccess(null);
     fetchSupabaseStatus();
     setIsSupabaseModalOpen(true);
   };
@@ -704,8 +708,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToApp }) =
   // Connect & Sync Supabase Live
   const handleConnectSupabase = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSupabaseModalError(null);
+    setSupabaseModalSuccess(null);
+
     if (!supabaseUrlInput.trim() || !supabaseKeyInput.trim()) {
-      showToast('Veuillez renseigner l’URL Supabase et la clé d’API.', 'error');
+      setSupabaseModalError('Veuillez renseigner l’URL Supabase et la clé d’API (Service Role Key recommandée).');
       return;
     }
 
@@ -725,11 +732,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToApp }) =
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
 
+      if (data.teachers && Array.isArray(data.teachers)) {
+        setTeachers(data.teachers);
+      }
+
+      setSupabaseModalSuccess(data.message || `Synchronisation réussie ! ${data.remoteCount} utilisateurs connectés.`);
       showToast(data.message || `Synchronisation réussie ! ${data.remoteCount} utilisateurs connectés.`, 'success');
-      setIsSupabaseModalOpen(false);
       fetchDashboardData(false);
       fetchSupabaseStatus();
+
+      setTimeout(() => {
+        setIsSupabaseModalOpen(false);
+        setSupabaseModalSuccess(null);
+      }, 2000);
     } catch (err: any) {
+      setSupabaseModalError(err.message || 'Erreur lors de la connexion Supabase.');
       showToast(err.message || 'Erreur lors de la connexion Supabase.', 'error');
     } finally {
       setSupabaseConnecting(false);
@@ -739,8 +756,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToApp }) =
   // Direct import of Supabase profiles JSON export
   const handleImportSupabaseJson = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSupabaseModalError(null);
+    setSupabaseModalSuccess(null);
+
     if (!supabaseJsonInput.trim()) {
-      showToast('Veuillez coller le JSON exporté depuis Supabase.', 'error');
+      setSupabaseModalError('Veuillez coller le JSON exporté depuis Supabase.');
       return;
     }
 
@@ -757,11 +777,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToApp }) =
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
 
+      setSupabaseModalSuccess(data.message || 'Importation JSON réussie !');
       showToast(data.message || 'Importation JSON réussie !', 'success');
-      setIsSupabaseModalOpen(false);
       setSupabaseJsonInput('');
       fetchDashboardData(false);
+
+      setTimeout(() => {
+        setIsSupabaseModalOpen(false);
+        setSupabaseModalSuccess(null);
+      }, 2000);
     } catch (err: any) {
+      setSupabaseModalError(err.message || 'Erreur lors de l’importation du JSON.');
       showToast(err.message || 'Erreur lors de l’importation du JSON.', 'error');
     } finally {
       setSupabaseConnecting(false);
@@ -3747,6 +3773,27 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToApp }) =
                 {supabaseStatusInfo?.localUsersCount ?? teachers.length} inscrits
               </span>
             </div>
+
+            {/* Alerte d'erreur ou de succès */}
+            {supabaseModalError && (
+              <div className="p-3.5 bg-rose-950/90 border border-rose-700 rounded-xl text-rose-200 text-xs whitespace-pre-line leading-relaxed flex items-start gap-2.5 shadow-lg animate-fade-in">
+                <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <p className="font-bold text-rose-100">Attention :</p>
+                  <p className="mt-0.5 text-rose-200 font-medium">{supabaseModalError}</p>
+                </div>
+              </div>
+            )}
+
+            {supabaseModalSuccess && (
+              <div className="p-3.5 bg-emerald-950/90 border border-emerald-700 rounded-xl text-emerald-200 text-xs whitespace-pre-line leading-relaxed flex items-start gap-2.5 shadow-lg animate-fade-in">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <p className="font-bold text-emerald-100">Synchronisation confirmée !</p>
+                  <p className="mt-0.5 text-emerald-200 font-medium">{supabaseModalSuccess}</p>
+                </div>
+              </div>
+            )}
 
             {/* Onglets Méthodes de synchronisation */}
             <div className="flex gap-2 border-b border-slate-800 pb-2">
