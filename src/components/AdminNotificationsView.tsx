@@ -100,6 +100,10 @@ export const AdminNotificationsView: React.FC<AdminNotificationsViewProps> = ({
         setLinkUrl('');
         setLinkText('');
         fetchAdminNotifications();
+        try {
+          window.dispatchEvent(new CustomEvent('praxis:notifications-updated', { detail: data.notification }));
+          localStorage.setItem('praxis_notif_last_update', Date.now().toString());
+        } catch {}
       } else {
         if (onNotify) onNotify(data.error || 'Erreur lors de la diffusion.', 'error');
       }

@@ -75,8 +75,20 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
 
   useEffect(() => {
     fetchNotifications();
-    const interval = setInterval(fetchNotifications, 45000);
-    return () => clearInterval(interval);
+
+    const handleUpdate = () => {
+      fetchNotifications();
+    };
+
+    window.addEventListener('praxis:notifications-updated', handleUpdate);
+    window.addEventListener('storage', handleUpdate);
+
+    const interval = setInterval(fetchNotifications, 10000);
+    return () => {
+      window.removeEventListener('praxis:notifications-updated', handleUpdate);
+      window.removeEventListener('storage', handleUpdate);
+      clearInterval(interval);
+    };
   }, []);
 
   const unreadCount = notifications.filter((n) => !readNotifIds.includes(n.id)).length;

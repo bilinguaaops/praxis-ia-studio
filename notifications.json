@@ -1,5 +1,24 @@
 [
   {
+    "id": "notif_mvrwvrb2_s7gs",
+    "title": "Annonce Test Professeurs",
+    "message": "Bienvenue ! Vos 15 crédits de correction sont disponibles.",
+    "type": "announcement",
+    "badgeText": "Officiel",
+    "createdAt": "2026-10-28T09:27:58.718Z",
+    "createdBy": "Direction Praxis",
+    "isActive": true
+  },
+  {
+    "id": "notif_mvrwm99q_9t0x",
+    "title": "Test de diffusion",
+    "message": "Ceci est un test de diffusion en direct",
+    "type": "announcement",
+    "createdAt": "2026-10-28T09:20:35.438Z",
+    "createdBy": "Direction Praxis",
+    "isActive": true
+  },
+  {
     "id": "notif_mvqz377w_rkzn",
     "title": "Nouvelle fonctionnalité disponible",
     "message": "Chers professeurs, vous pouvez désormais suivre les annonces pédagogiques directement depuis cette cloche.",

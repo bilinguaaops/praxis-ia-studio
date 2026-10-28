@@ -46,6 +46,7 @@ import {
   Database,
   Bell,
   Radio,
+  Coins,
 } from 'lucide-react';
 import {
   Chart,
@@ -64,6 +65,8 @@ import {
 import { TeacherAccount, TransactionRecord, AdminKPISummary, SaaSPlan, AccountStatus, SchoolQuoteRequest } from '../types';
 import { AdminAffiliatesView } from './AdminAffiliatesView';
 import { AdminNotificationsView } from './AdminNotificationsView';
+import { AdminUserCreditsView } from './AdminUserCreditsView';
+import { AdminNotificationBar } from './AdminNotificationBar';
 
 // Register Chart.js components
 Chart.register(
@@ -84,7 +87,7 @@ interface AdminDashboardProps {
   onBackToApp: () => void;
 }
 
-type TabKey = 'overview' | 'crm' | 'transactions' | 'automations' | 'quotes' | 'affiliates' | 'notifications';
+type TabKey = 'overview' | 'crm' | 'credits' | 'transactions' | 'automations' | 'quotes' | 'affiliates' | 'notifications';
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToApp }) => {
   // Authentication State
@@ -140,6 +143,44 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToApp }) =
   const [isDbModalOpen, setIsDbModalOpen] = useState(false);
   const [dbUrlInput, setDbUrlInput] = useState('');
   const [dbKeyInput, setDbKeyInput] = useState('');
+
+  // Admin Bell Dropdown Popover state
+  const [isBellDropdownOpen, setIsBellDropdownOpen] = useState(false);
+  const [adminBellNotifs, setAdminBellNotifs] = useState<any[]>([]);
+  const bellDropdownRef = useRef<HTMLDivElement>(null);
+
+  const fetchAdminBellNotifs = async () => {
+    try {
+      const res = await fetch('/api/notifications');
+      const data = await res.json();
+      if (data.success && Array.isArray(data.notifications)) {
+        setAdminBellNotifs(data.notifications);
+      }
+    } catch {}
+  };
+
+  useEffect(() => {
+    fetchAdminBellNotifs();
+    const handleUpd = () => fetchAdminBellNotifs();
+    window.addEventListener('praxis:notifications-updated', handleUpd);
+    window.addEventListener('storage', handleUpd);
+    const interval = setInterval(fetchAdminBellNotifs, 10000);
+    return () => {
+      window.removeEventListener('praxis:notifications-updated', handleUpd);
+      window.removeEventListener('storage', handleUpd);
+      clearInterval(interval);
+    };
+  }, []);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (bellDropdownRef.current && !bellDropdownRef.current.contains(e.target as Node)) {
+        setIsBellDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
   const [dbLoading, setDbLoading] = useState(false);
   const [dbStatusInfo, setDbStatusInfo] = useState<any>(null);
 
@@ -1288,6 +1329,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToApp }) =
 
               <button
                 type="button"
+                onClick={() => setActiveTab('credits')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
+                  activeTab === 'credits'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                }`}
+              >
+                <Coins className="w-3.5 h-3.5" />
+                <span>Consommation Crédits</span>
+              </button>
+
+              <button
+                type="button"
                 onClick={() => setActiveTab('transactions')}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
                   activeTab === 'transactions'
@@ -1399,6 +1453,100 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToApp }) =
                 </span>
               </div>
 
+              {/* Notification Bell with interactive dropdown in Admin Dashboard */}
+              <div className="relative" ref={bellDropdownRef}>
+                <button
+                  type="button"
+                  onClick={() => setIsBellDropdownOpen(!isBellDropdownOpen)}
+                  className={`relative p-2 rounded-lg transition-colors cursor-pointer ${
+                    isBellDropdownOpen || activeTab === 'notifications'
+                      ? 'text-white bg-blue-600/30 border border-blue-500/50'
+                      : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                  }`}
+                  title="Voir les annonces diffusées et notifications"
+                >
+                  <Bell className="w-4 h-4" />
+                  {adminBellNotifs.length > 0 && (
+                    <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 flex items-center justify-center bg-blue-600 text-white text-[10px] font-bold rounded-full shadow-sm animate-pulse">
+                      {adminBellNotifs.length}
+                    </span>
+                  )}
+                </button>
+
+                {isBellDropdownOpen && (
+                  <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-[#111827] rounded-xl shadow-2xl border border-slate-700/80 p-3.5 space-y-2.5 z-50 text-xs animate-scale-in">
+                    <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+                      <div className="flex items-center gap-2">
+                        <Bell className="w-4 h-4 text-blue-400" />
+                        <span className="font-bold text-white">Annonces Diffusées ({adminBellNotifs.length})</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsBellDropdownOpen(false);
+                          setActiveTab('notifications');
+                        }}
+                        className="text-[11px] text-blue-400 hover:text-blue-300 font-semibold cursor-pointer underline"
+                      >
+                        Gérer / Nouvelle annonce
+                      </button>
+                    </div>
+
+                    <div className="max-h-80 overflow-y-auto space-y-2 divide-y divide-slate-800/60 pr-1">
+                      {adminBellNotifs.length === 0 ? (
+                        <div className="text-center py-6 text-slate-400">
+                          <Bell className="w-6 h-6 mx-auto mb-1.5 opacity-40 text-slate-500" />
+                          <p className="text-[11px]">Aucune annonce active.</p>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsBellDropdownOpen(false);
+                              setActiveTab('notifications');
+                            }}
+                            className="mt-2 text-xs text-blue-400 hover:underline font-bold"
+                          >
+                            + Créer une annonce maintenant
+                          </button>
+                        </div>
+                      ) : (
+                        adminBellNotifs.map((n) => (
+                          <div key={n.id} className="pt-2 first:pt-0 space-y-1">
+                            <div className="flex items-center justify-between gap-1.5">
+                              <span className="font-semibold text-white text-xs flex items-center gap-1.5">
+                                <span className={`w-1.5 h-1.5 rounded-full ${n.type === 'success' ? 'bg-emerald-400' : n.type === 'warning' ? 'bg-amber-400' : 'bg-blue-400'}`}></span>
+                                {n.title}
+                              </span>
+                              {n.badgeText && (
+                                <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-blue-900/60 text-blue-300 border border-blue-700/40">
+                                  {n.badgeText}
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[11px] text-slate-300 leading-relaxed">{n.message}</p>
+                            <span className="text-[10px] text-slate-500 block">
+                              Diffusé le {new Date(n.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          </div>
+                        ))
+                      )}
+                    </div>
+
+                    <div className="pt-2 border-t border-slate-800">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsBellDropdownOpen(false);
+                          setActiveTab('notifications');
+                        }}
+                        className="w-full py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold text-center transition cursor-pointer"
+                      >
+                        Ouvrir le panneau de diffusion complet
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
               <button
                 type="button"
                 onClick={() => fetchDashboardData(false)}
@@ -1422,6 +1570,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToApp }) =
           </div>
         </div>
       </header>
+
+      {/* Global Quick Broadcast Bar for Admin */}
+      <div className="max-w-[1536px] mx-auto w-full px-4 sm:px-6 lg:px-8 pt-4">
+        <AdminNotificationBar
+          adminToken={getAdminToken()}
+          onNotify={(text, type) => showToast(text, type)}
+          onOpenNotificationsTab={() => setActiveTab('notifications')}
+        />
+      </div>
 
       {/* Main Content Body */}
       <main className="flex-1 max-w-[1536px] mx-auto w-full px-4 sm:px-6 lg:px-8 py-8">
@@ -2950,6 +3107,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToApp }) =
         {activeTab === 'notifications' && (
           <div className="animate-fade-in">
             <AdminNotificationsView
+              adminToken={getAdminToken()}
+              onNotify={(text, type) => showToast(text, type)}
+            />
+          </div>
+        )}
+
+        {/* ========================================================= */}
+        {/* TAB 8: AUDIT & HISTORIQUE DE CONSOMMATION DES CRÉDITS */}
+        {/* ========================================================= */}
+        {activeTab === 'credits' && (
+          <div className="animate-fade-in">
+            <AdminUserCreditsView
               adminToken={getAdminToken()}
               onNotify={(text, type) => showToast(text, type)}
             />
