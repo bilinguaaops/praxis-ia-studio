@@ -213,7 +213,7 @@ export const Header: React.FC<HeaderProps> = ({
                 onClick={onOpenContactModal}
                 id="btn-header-contact"
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-slate-600 hover:text-blue-700 hover:bg-white/80 transition-all cursor-pointer"
-                title="Contacter le support direct (+225 0103890314 / agoussoukevin@gmail.com)"
+                title="Contacter le support direct (+225 0103890314 / praxis.edu0@gmail.com)"
               >
                 <Phone className="w-3.5 h-3.5 text-emerald-600" />
                 <span>Contact</span>

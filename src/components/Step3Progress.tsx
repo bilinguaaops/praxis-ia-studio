@@ -227,7 +227,7 @@ export const Step3Progress: React.FC<Step3ProgressProps> = ({
     addLog(`🔄 Analyse lancée pour "${sub.studentName}"...`);
 
     let attempts = 0;
-    const maxAttempts = 3;
+    const maxAttempts = 2;
     while (attempts < maxAttempts) {
       attempts++;
       try {
@@ -254,10 +254,9 @@ export const Step3Progress: React.FC<Step3ProgressProps> = ({
         );
         break;
       } catch (err: any) {
-        if (attempts < maxAttempts && !err.message?.includes('Inscription') && !err.message?.includes('Limite') && !err.message?.includes('épuisé')) {
-          const waitSec = attempts * 2;
-          addLog(`⚠️ Serveur sollicité pour "${sub.studentName}" (${attempts}/${maxAttempts}), bascule automatique et réessai dans ${waitSec}s...`);
-          await new Promise((r) => setTimeout(r, waitSec * 1000));
+        if (attempts < maxAttempts && !err.message?.includes('Inscription') && !err.message?.includes('Limite')) {
+          addLog(`⚠️ Serveur temporairement sollicité pour "${sub.studentName}", bascule automatique et réessai...`);
+          await new Promise((r) => setTimeout(r, 1800));
           continue;
         }
 
@@ -307,8 +306,8 @@ export const Step3Progress: React.FC<Step3ProgressProps> = ({
       await retryStudent(currentSub);
 
       if (i < queue.length - 1 && !isCancelledRef.current) {
-        addLog(`⏳ Temporisation d'enchaînement fluide (2s) avant la copie suivante...`);
-        await new Promise((r) => setTimeout(r, 2000));
+        addLog(`⏳ Temporisation anti-quota (1.5s) avant la copie suivante...`);
+        await new Promise((r) => setTimeout(r, 1500));
       }
     }
 

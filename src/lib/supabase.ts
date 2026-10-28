@@ -14,14 +14,18 @@ const isValidPublishableKey = (key: string): boolean => {
   return true;
 };
 
-const DEFAULT_PRAXIS_SUPABASE_URL = 'https://chrtrfyynnbgxtysrzjo.supabase.co';
-const DEFAULT_PRAXIS_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNocnRyZnl5bm5iZ3h0eXNyempvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA3NzUxMTQsImV4cCI6MjEwNjM1MTExNH0.AzZqCXhS1r38ZFlXkkQeWYzwLwLct4a6Q05axno16tU';
+export const isSupabaseConfigured = isValidHttpUrl(rawUrl) && isValidPublishableKey(rawKey);
 
-// Client singleton Supabase officiel (garanti sans crash avec URL de production)
-const safeUrl = isValidHttpUrl(rawUrl) ? rawUrl : DEFAULT_PRAXIS_SUPABASE_URL;
-const safeKey = isValidPublishableKey(rawKey) ? rawKey : DEFAULT_PRAXIS_ANON_KEY;
+if (!isSupabaseConfigured && typeof window !== 'undefined') {
+  console.info(
+    '[Praxis Auth] Mode local actif (Supabase non configuré). ' +
+    'Renseignez VITE_SUPABASE_URL et VITE_SUPABASE_PUBLISHABLE_KEY pour activer l’authentification cloud.'
+  );
+}
 
-export const isSupabaseConfigured = true;
+// Client singleton Supabase officiel (garanti sans crash avec URL de repli sûre)
+const safeUrl = isValidHttpUrl(rawUrl) ? rawUrl : 'https://praxis-app.supabase.co';
+const safeKey = isValidPublishableKey(rawKey) ? rawKey : 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.e30.placeholder';
 
 export const supabase: SupabaseClient = createClient(
   safeUrl,

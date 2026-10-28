@@ -625,11 +625,11 @@ export const FaqView: React.FC<FaqViewProps> = ({ onStartCorrection, onOpenConta
               </div>
               <div className="truncate">
                 <span className="text-[10px] text-blue-200 block uppercase font-bold tracking-wider">Email support</span>
-                <span className="font-mono font-bold text-sm text-white truncate block">agoussoukevin@gmail.com</span>
+                <span className="font-mono font-bold text-sm text-white truncate block">praxis.edu0@gmail.com</span>
               </div>
             </div>
             <a
-              href="mailto:agoussoukevin@gmail.com?subject=Contact%20Praxis%20IA"
+              href="mailto:praxis.edu0@gmail.com?subject=Contact%20Praxis%20IA"
               className="px-2.5 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold text-[11px] transition-colors shrink-0"
               title="Envoyer un e-mail"
             >

@@ -1156,7 +1156,7 @@ Donc BD = (OB * AC) / OA = (4.5 * 6) / 3 = 9 cm."`,
                       Contact Par E-mail
                     </span>
                     <h3 className="text-lg sm:text-xl font-extrabold text-slate-900 font-mono break-all">
-                      agoussoukevin@gmail.com
+                      praxis.edu0@gmail.com
                     </h3>
                   </div>
                 </div>
@@ -1167,7 +1167,7 @@ Donc BD = (OB * AC) / OA = (4.5 * 6) / 3 = 9 cm."`,
 
               <div className="pt-2">
                 <a
-                  href="mailto:agoussoukevin@gmail.com?subject=Demande%20d%27information%20Praxis%20IA"
+                  href="mailto:praxis.edu0@gmail.com?subject=Demande%20d%27information%20Praxis%20IA"
                   className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs transition-colors shadow-xs"
                 >
                   <Mail className="w-4 h-4" />
@@ -1233,14 +1233,14 @@ Donc BD = (OB * AC) / OA = (4.5 * 6) / 3 = 9 cm."`,
               </a>
 
               <a
-                href="mailto:agoussoukevin@gmail.com"
+                href="mailto:praxis.edu0@gmail.com"
                 className="flex items-center gap-2 text-slate-700 hover:text-blue-700 transition-colors font-medium"
                 title="Envoyer un e-mail"
               >
                 <div className="w-6 h-6 rounded-md bg-blue-50 text-blue-600 flex items-center justify-center">
                   <Mail className="w-3.5 h-3.5" />
                 </div>
-                <span>agoussoukevin@gmail.com</span>
+                <span>praxis.edu0@gmail.com</span>
               </a>
 
               {onOpenContact && (

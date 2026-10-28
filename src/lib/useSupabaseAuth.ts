@@ -168,15 +168,17 @@ export function useSupabaseAuth() {
     try {
       const remainingCredits = Math.max(0, 15 - newCount);
       await supabase
-        .from('credit_balances')
+        .from('user_credit_balances')
         .update({
           total_copies_corrected: newCount,
-          last_updated_at: new Date().toISOString(),
+          total_available_credits: remainingCredits,
+          updated_at: new Date().toISOString(),
         })
-        .eq('teacher_id', user.id);
+        .eq('user_id', user.id);
       setBalance((prev) => prev ? {
         ...prev,
         total_copies_corrected: newCount,
+        total_available_credits: remainingCredits,
       } : prev);
     } catch (err) {
       console.warn('Could not update Supabase balance:', err);
