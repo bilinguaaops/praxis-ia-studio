@@ -6,6 +6,7 @@ import dotenv from 'dotenv';
 import { GoogleGenAI, Type } from '@google/genai';
 import Anthropic from '@anthropic-ai/sdk';
 import { createServer as createViteServer } from 'vite';
+import { createClient } from '@supabase/supabase-js';
 
 dotenv.config({ override: true });
 
@@ -5250,6 +5251,311 @@ app.post('/api/admin/import-teachers', requireAdminAuth, (req, res) => {
     });
   } catch (err: any) {
     res.status(500).json({ error: 'Erreur lors de l’importation: ' + err.message });
+  }
+});
+
+// ============================================================================
+// ⚡ SYNCHRONISATION SUPABASE DIRECTE (367+ UTILISATEURS / PROFILES)
+// ============================================================================
+
+function getActiveSupabaseClient(customUrl?: string, customKey?: string) {
+  const url = (customUrl || process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '').trim();
+  const key = (customKey || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY || '').trim();
+  if (!url || !key || !url.startsWith('http')) return null;
+  return { client: createClient(url, key, { auth: { persistSession: false } }), url, key };
+}
+
+// Helper: Synchroniser les profils Supabase vers leads.json
+async function syncFromSupabase(client: any) {
+  // 1. Récupérer tous les profils (jusqu'à 2000)
+  const { data: profiles, error: pError } = await client
+    .from('profiles')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(2000);
+
+  if (pError) throw new Error('Erreur lecture profiles: ' + pError.message);
+  if (!profiles || !Array.isArray(profiles)) return { total: loadLeads().length, importedCount: 0, updatedCount: 0, remoteCount: 0 };
+
+  // 2. Récupérer soldes de crédits si la table existe
+  const balancesMap: Record<string, any> = {};
+  try {
+    const { data: balances } = await client.from('credit_balances').select('*').limit(2000);
+    if (balances && Array.isArray(balances)) {
+      balances.forEach((b: any) => {
+        if (b.teacher_id) balancesMap[b.teacher_id] = b;
+      });
+    }
+  } catch {}
+
+  // 3. Récupérer abonnements si la table existe
+  const subsMap: Record<string, any> = {};
+  try {
+    const { data: subs } = await client.from('subscriptions').select('*').limit(2000);
+    if (subs && Array.isArray(subs)) {
+      subs.forEach((s: any) => {
+        if (s.teacher_id) subsMap[s.teacher_id] = s;
+      });
+    }
+  } catch {}
+
+  const leads = loadLeads();
+  let importedCount = 0;
+  let updatedCount = 0;
+
+  profiles.forEach((p: any) => {
+    const email = (p.email || '').trim().toLowerCase();
+    if (!email || !email.includes('@')) return;
+
+    const b = balancesMap[p.id];
+    const s = subsMap[p.id];
+
+    const freeCredits = b?.free_credits ?? 15;
+    const copiesUsed = b?.total_copies_corrected ?? 0;
+    const subCredits = b?.subscription_credits ?? Math.max(0, freeCredits - copiesUsed);
+    const extraCredits = b?.purchased_credits ?? 0;
+    const plan = s?.plan_id || 'trial';
+    const status = (s?.status === 'active' || p.role === 'admin' || (copiesUsed > 0 && copiesUsed < 15)) ? 'active' : 'inactive';
+
+    const existingIdx = leads.findIndex((l) => l.email.toLowerCase() === email || l.id === p.id);
+    if (existingIdx !== -1) {
+      leads[existingIdx] = {
+        ...leads[existingIdx],
+        name: p.full_name || leads[existingIdx].name || email.split('@')[0],
+        whatsapp: p.phone_whatsapp || leads[existingIdx].whatsapp || '',
+        school: p.school_name || leads[existingIdx].school || '',
+        city: p.city || leads[existingIdx].city || '',
+        plan: leads[existingIdx].plan === 'institution' ? 'institution' : plan,
+        status: leads[existingIdx].status === 'active' ? 'active' : status,
+        copiesCorrected: copiesUsed || leads[existingIdx].copiesCorrected || 0,
+        quota: freeCredits + extraCredits,
+        subscriptionCredits: Math.max(0, subCredits),
+        extraCredits,
+      };
+      updatedCount++;
+    } else {
+      leads.unshift({
+        id: p.id || ('lead_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6)),
+        name: p.full_name || email.split('@')[0],
+        email,
+        whatsapp: p.phone_whatsapp || '',
+        school: p.school_name || '',
+        city: p.city || '',
+        plan,
+        status,
+        copiesCorrected: copiesUsed,
+        quota: freeCredits + extraCredits,
+        subscriptionCredits: Math.max(0, subCredits),
+        extraCredits,
+        totalSpent: plan === 'annual' ? 30000 : plan === 'monthly' ? 5000 : 0,
+        notes: `Enseignant synchronisé depuis Supabase Cloud (${p.role || 'professeur'}).`,
+        createdAt: p.created_at || new Date().toISOString(),
+        lastActiveAt: b?.last_updated_at || p.created_at || new Date().toISOString(),
+      });
+      importedCount++;
+    }
+  });
+
+  saveLeads(leads);
+  return { total: leads.length, importedCount, updatedCount, remoteCount: profiles.length };
+}
+
+// Protected: Vérifier le statut de connexion à Supabase
+app.get('/api/admin/supabase-status', requireAdminAuth, async (req, res) => {
+  try {
+    const leads = loadLeads();
+    const config = getActiveSupabaseClient();
+    if (!config) {
+      return res.json({
+        configured: false,
+        url: '',
+        connected: false,
+        remoteUsersCount: null,
+        localUsersCount: leads.length,
+        message: 'Supabase n’est pas encore configuré avec une clé valide.',
+      });
+    }
+
+    const { count, error } = await config.client
+      .from('profiles')
+      .select('*', { count: 'exact', head: true });
+
+    if (error) {
+      return res.json({
+        configured: true,
+        url: config.url,
+        connected: false,
+        remoteUsersCount: null,
+        localUsersCount: leads.length,
+        error: error.message,
+        message: `Erreur de connexion Supabase: ${error.message}`,
+      });
+    }
+
+    res.json({
+      configured: true,
+      url: config.url,
+      connected: true,
+      remoteUsersCount: count ?? 0,
+      localUsersCount: leads.length,
+      message: `Connecté à Supabase (${count ?? 0} utilisateurs en ligne).`,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Protected: Connecter et sauvegarder les identifiants Supabase
+app.post('/api/admin/supabase-connect', requireAdminAuth, async (req, res) => {
+  try {
+    const { supabaseUrl, supabaseKey } = req.body;
+    if (!supabaseUrl || !supabaseKey) {
+      return res.status(400).json({ error: 'URL Supabase et Clé API (Service Role ou Anon) requises.' });
+    }
+
+    const cleanUrl = String(supabaseUrl).trim().replace(/\/+$/, '');
+    const cleanKey = String(supabaseKey).trim();
+
+    // Tester la connexion
+    const testClient = createClient(cleanUrl, cleanKey, { auth: { persistSession: false } });
+    const { count, error } = await testClient
+      .from('profiles')
+      .select('*', { count: 'exact', head: true });
+
+    if (error) {
+      return res.status(400).json({
+        error: `Impossible de se connecter à cette base Supabase: ${error.message}. Vérifiez l’URL et la clé d'API (ou essayez la Service Role Key).`,
+      });
+    }
+
+    // Mettre à jour les variables d'environnement en mémoire
+    process.env.SUPABASE_URL = cleanUrl;
+    process.env.VITE_SUPABASE_URL = cleanUrl;
+    process.env.SUPABASE_SERVICE_ROLE_KEY = cleanKey;
+    process.env.VITE_SUPABASE_PUBLISHABLE_KEY = cleanKey;
+
+    // Enregistrer dans le fichier .env pour persister aux redémarrages
+    try {
+      const envPath = path.join(process.cwd(), '.env');
+      let envContent = fs.existsSync(envPath) ? fs.readFileSync(envPath, 'utf-8') : '';
+      if (!envContent.includes('VITE_SUPABASE_URL=')) {
+        envContent += `\nVITE_SUPABASE_URL="${cleanUrl}"\nSUPABASE_SERVICE_ROLE_KEY="${cleanKey}"\n`;
+      } else {
+        envContent = envContent.replace(/VITE_SUPABASE_URL=.*/, `VITE_SUPABASE_URL="${cleanUrl}"`);
+        if (envContent.includes('SUPABASE_SERVICE_ROLE_KEY=')) {
+          envContent = envContent.replace(/SUPABASE_SERVICE_ROLE_KEY=.*/, `SUPABASE_SERVICE_ROLE_KEY="${cleanKey}"`);
+        } else {
+          envContent += `\nSUPABASE_SERVICE_ROLE_KEY="${cleanKey}"\n`;
+        }
+      }
+      fs.writeFileSync(envPath, envContent, 'utf-8');
+    } catch (e) {
+      console.warn('[Admin] Note sauvegarde .env :', e);
+    }
+
+    // Synchroniser immédiatement les utilisateurs
+    const syncRes = await syncFromSupabase(testClient);
+
+    res.json({
+      success: true,
+      remoteCount: count ?? syncRes.remoteCount,
+      total: syncRes.total,
+      importedCount: syncRes.importedCount,
+      updatedCount: syncRes.updatedCount,
+      message: `Connexion établie ! ${syncRes.remoteCount} profils détectés sur Supabase, total de ${syncRes.total} enseignants sur le tableau de bord.`,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Erreur lors de la connexion Supabase: ' + err.message });
+  }
+});
+
+// Protected: Forcer la synchronisation avec Supabase
+app.post('/api/admin/supabase-sync', requireAdminAuth, async (req, res) => {
+  try {
+    const config = getActiveSupabaseClient(req.body.supabaseUrl, req.body.supabaseKey);
+    if (!config) {
+      return res.status(400).json({
+        error: 'Supabase n’est pas configuré. Veuillez d’abord renseigner votre URL et Clé Supabase.',
+      });
+    }
+
+    const syncRes = await syncFromSupabase(config.client);
+    res.json({
+      success: true,
+      ...syncRes,
+      message: `Synchronisation réussie ! ${syncRes.remoteCount} utilisateurs récupérés depuis Supabase. Total actuel : ${syncRes.total}.`,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Erreur synchronisation Supabase: ' + err.message });
+  }
+});
+
+// Protected: Import direct d'un JSON brut de profils Supabase
+app.post('/api/admin/supabase-import-json', requireAdminAuth, (req, res) => {
+  try {
+    const { rawJson } = req.body;
+    let list: any[] = [];
+    if (Array.isArray(rawJson)) {
+      list = rawJson;
+    } else if (typeof rawJson === 'string') {
+      list = JSON.parse(rawJson);
+    }
+
+    if (!Array.isArray(list) || list.length === 0) {
+      return res.status(400).json({ error: 'Format JSON invalide. Un tableau d’objets profils est attendu.' });
+    }
+
+    const leads = loadLeads();
+    let added = 0;
+    let updated = 0;
+
+    list.forEach((p: any) => {
+      const email = (p.email || p.user_email || '').trim().toLowerCase();
+      if (!email || !email.includes('@')) return;
+
+      const existingIdx = leads.findIndex((l) => l.email.toLowerCase() === email || l.id === p.id);
+      if (existingIdx !== -1) {
+        leads[existingIdx] = {
+          ...leads[existingIdx],
+          name: p.full_name || p.name || leads[existingIdx].name,
+          whatsapp: p.phone_whatsapp || p.phone || p.whatsapp || leads[existingIdx].whatsapp,
+          school: p.school_name || p.school || leads[existingIdx].school,
+          city: p.city || leads[existingIdx].city,
+        };
+        updated++;
+      } else {
+        leads.unshift({
+          id: p.id || ('lead_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6)),
+          name: p.full_name || p.name || email.split('@')[0],
+          email,
+          whatsapp: p.phone_whatsapp || p.phone || p.whatsapp || '',
+          school: p.school_name || p.school || '',
+          city: p.city || '',
+          plan: p.plan || 'trial',
+          status: p.status || 'trial',
+          copiesCorrected: p.copiesCorrected || p.total_copies_corrected || 0,
+          quota: p.quota || p.total_available_credits || 15,
+          subscriptionCredits: p.subscriptionCredits || 15,
+          extraCredits: p.extraCredits || 0,
+          totalSpent: p.totalSpent || 0,
+          notes: 'Importé depuis l’export JSON Supabase.',
+          createdAt: p.created_at || new Date().toISOString(),
+          lastActiveAt: p.updated_at || p.created_at || new Date().toISOString(),
+        });
+        added++;
+      }
+    });
+
+    saveLeads(leads);
+    res.json({
+      success: true,
+      added,
+      updated,
+      total: leads.length,
+      message: `${added} profil(s) ajouté(s) et ${updated} mis à jour depuis le JSON Supabase. Total actuel : ${leads.length}.`,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Erreur import JSON Supabase: ' + err.message });
   }
 });
 

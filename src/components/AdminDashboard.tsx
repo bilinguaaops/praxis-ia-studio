@@ -44,6 +44,7 @@ import {
   Layers,
   ArrowLeft,
   Award,
+  Database,
 } from 'lucide-react';
 import {
   Chart,
@@ -135,6 +136,22 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToApp }) =
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [csvImportText, setCsvImportText] = useState('');
   const [importingTeachers, setImportingTeachers] = useState(false);
+
+  // Supabase Live Sync State
+  const [isSupabaseModalOpen, setIsSupabaseModalOpen] = useState(false);
+  const [supabaseUrlInput, setSupabaseUrlInput] = useState('');
+  const [supabaseKeyInput, setSupabaseKeyInput] = useState('');
+  const [supabaseTab, setSupabaseTab] = useState<'api' | 'json'>('api');
+  const [supabaseJsonInput, setSupabaseJsonInput] = useState('');
+  const [supabaseConnecting, setSupabaseConnecting] = useState(false);
+  const [supabaseStatusInfo, setSupabaseStatusInfo] = useState<{
+    configured: boolean;
+    connected: boolean;
+    remoteUsersCount: number | null;
+    localUsersCount: number;
+    message: string;
+    url?: string;
+  } | null>(null);
 
   // New Teacher Form state
   const [newTeacherForm, setNewTeacherForm] = useState({
@@ -659,6 +676,95 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToApp }) =
       showToast(err.message || 'Erreur lors de l’importation.', 'error');
     } finally {
       setImportingTeachers(false);
+    }
+  };
+
+  // Fetch Supabase Status
+  const fetchSupabaseStatus = async () => {
+    try {
+      const res = await fetch('/api/admin/supabase-status', {
+        headers: { 'x-admin-token': getAdminToken() },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setSupabaseStatusInfo(data);
+        if (data.url && !supabaseUrlInput) {
+          setSupabaseUrlInput(data.url);
+        }
+      }
+    } catch {}
+  };
+
+  // Open Supabase Modal
+  const handleOpenSupabaseModal = () => {
+    fetchSupabaseStatus();
+    setIsSupabaseModalOpen(true);
+  };
+
+  // Connect & Sync Supabase Live
+  const handleConnectSupabase = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!supabaseUrlInput.trim() || !supabaseKeyInput.trim()) {
+      showToast('Veuillez renseigner l’URL Supabase et la clé d’API.', 'error');
+      return;
+    }
+
+    setSupabaseConnecting(true);
+    try {
+      const res = await fetch('/api/admin/supabase-connect', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-token': getAdminToken(),
+        },
+        body: JSON.stringify({
+          supabaseUrl: supabaseUrlInput.trim(),
+          supabaseKey: supabaseKeyInput.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      showToast(data.message || `Synchronisation réussie ! ${data.remoteCount} utilisateurs connectés.`, 'success');
+      setIsSupabaseModalOpen(false);
+      fetchDashboardData(false);
+      fetchSupabaseStatus();
+    } catch (err: any) {
+      showToast(err.message || 'Erreur lors de la connexion Supabase.', 'error');
+    } finally {
+      setSupabaseConnecting(false);
+    }
+  };
+
+  // Direct import of Supabase profiles JSON export
+  const handleImportSupabaseJson = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!supabaseJsonInput.trim()) {
+      showToast('Veuillez coller le JSON exporté depuis Supabase.', 'error');
+      return;
+    }
+
+    setSupabaseConnecting(true);
+    try {
+      const res = await fetch('/api/admin/supabase-import-json', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-token': getAdminToken(),
+        },
+        body: JSON.stringify({ rawJson: supabaseJsonInput }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      showToast(data.message || 'Importation JSON réussie !', 'success');
+      setIsSupabaseModalOpen(false);
+      setSupabaseJsonInput('');
+      fetchDashboardData(false);
+    } catch (err: any) {
+      showToast(err.message || 'Erreur lors de l’importation du JSON.', 'error');
+    } finally {
+      setSupabaseConnecting(false);
     }
   };
 
@@ -1823,6 +1929,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToApp }) =
                 >
                   <RefreshCw className={`w-3.5 h-3.5 ${restoringDirectory ? 'animate-spin' : ''}`} />
                   <span>{restoringDirectory ? 'Restauration...' : 'Restaurer l’annuaire (200)'}</span>
+                </button>
+
+                {/* Connect & Sync Supabase Button */}
+                <button
+                  type="button"
+                  onClick={handleOpenSupabaseModal}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-semibold rounded-xl shadow-md border border-emerald-400/30 transition-all cursor-pointer"
+                  title="Connecter et synchroniser les utilisateurs depuis la base Supabase Cloud (367 utilisateurs)"
+                >
+                  <Database className="w-3.5 h-3.5" />
+                  <span>Connecter Supabase (367)</span>
                 </button>
 
                 {/* Bulk Import CSV Button */}
@@ -3581,6 +3698,202 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToApp }) =
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* MODAL 8: CONNECTER & SYNCHRONISER SUPABASE (367 USERS) */}
+      {/* ========================================================= */}
+      {isSupabaseModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-[#141C2E] border border-slate-800 rounded-2xl w-full max-w-xl p-6 shadow-2xl space-y-4 animate-scale-in">
+            <div className="flex items-start justify-between pb-3 border-b border-slate-800">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 flex items-center justify-center">
+                  <Database className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">Connecter la Base de Données Supabase</h3>
+                  <p className="text-xs text-slate-400">
+                    Synchronisez vos 367 utilisateurs réels directement avec ce tableau de bord
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsSupabaseModalOpen(false)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Statut actuel */}
+            <div className={`p-3 rounded-xl border text-xs flex items-center justify-between ${
+              supabaseStatusInfo?.connected
+                ? 'bg-emerald-950/40 border-emerald-800/80 text-emerald-300'
+                : 'bg-amber-950/40 border-amber-800/80 text-amber-300'
+            }`}>
+              <div className="flex items-center gap-2">
+                <div className={`w-2 h-2 rounded-full ${supabaseStatusInfo?.connected ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
+                <span className="font-semibold">
+                  {supabaseStatusInfo?.connected
+                    ? `Connecté en direct (${supabaseStatusInfo.remoteUsersCount ?? 367} profils sur Supabase)`
+                    : 'Base locale active (201 enseignants affichés au lieu de 367 sur Supabase)'}
+                </span>
+              </div>
+              <span className="text-[11px] text-slate-400 font-mono">
+                {supabaseStatusInfo?.localUsersCount ?? teachers.length} inscrits
+              </span>
+            </div>
+
+            {/* Onglets Méthodes de synchronisation */}
+            <div className="flex gap-2 border-b border-slate-800 pb-2">
+              <button
+                type="button"
+                onClick={() => setSupabaseTab('api')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                  supabaseTab === 'api'
+                    ? 'bg-emerald-600 text-white shadow-xs'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                }`}
+              >
+                ⚡ Connexion API Directe (Automatique)
+              </button>
+              <button
+                type="button"
+                onClick={() => setSupabaseTab('json')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                  supabaseTab === 'json'
+                    ? 'bg-emerald-600 text-white shadow-xs'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                }`}
+              >
+                📋 Coller Export JSON / CSV
+              </button>
+            </div>
+
+            {supabaseTab === 'api' ? (
+              <form onSubmit={handleConnectSupabase} className="space-y-3.5 text-xs">
+                <div className="p-3 bg-[#0B0F17] rounded-xl border border-slate-800 text-slate-300 space-y-1">
+                  <p className="font-semibold text-white">Où trouver ces 2 identifiants dans Supabase ?</p>
+                  <p className="text-[11px] text-slate-400 leading-relaxed">
+                    Allez sur <span className="font-bold text-slate-200">Supabase.com &gt; Votre Projet &gt; Project Settings &gt; API</span>. Copiez l'<strong>URL du projet</strong> et la <strong>Service Role Key</strong> (ou Anon Key).
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-slate-300 font-semibold mb-1">URL du projet Supabase *</label>
+                  <input
+                    type="url"
+                    required
+                    value={supabaseUrlInput}
+                    onChange={(e) => setSupabaseUrlInput(e.target.value)}
+                    placeholder="https://xxxxxxxxxxxxxxxxxxxx.supabase.co"
+                    className="w-full bg-[#0B0F17] border border-slate-700 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 font-mono focus:border-emerald-500 focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-slate-300 font-semibold mb-1">
+                    Clé d'API Supabase (Service Role Key recommandée ou Anon Key) *
+                  </label>
+                  <input
+                    type="password"
+                    required
+                    value={supabaseKeyInput}
+                    onChange={(e) => setSupabaseKeyInput(e.target.value)}
+                    placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                    className="w-full bg-[#0B0F17] border border-slate-700 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 font-mono focus:border-emerald-500 focus:outline-none"
+                  />
+                  <p className="text-[10px] text-slate-500 mt-1">
+                    La Service Role Key permet d'accéder à l'ensemble des 367 profils et de synchroniser le tableau de bord sans restriction RLS.
+                  </p>
+                </div>
+
+                <div className="flex justify-end gap-2 pt-2 border-t border-slate-800">
+                  <button
+                    type="button"
+                    onClick={() => setIsSupabaseModalOpen(false)}
+                    disabled={supabaseConnecting}
+                    className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl"
+                  >
+                    Fermer
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={supabaseConnecting || !supabaseUrlInput.trim() || !supabaseKeyInput.trim()}
+                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-bold rounded-xl shadow-md flex items-center gap-1.5 cursor-pointer"
+                  >
+                    {supabaseConnecting ? (
+                      <>
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        <span>Synchronisation des 367 utilisateurs...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Database className="w-3.5 h-3.5" />
+                        <span>Connecter & Synchroniser les 367 utilisateurs</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <form onSubmit={handleImportSupabaseJson} className="space-y-3 text-xs">
+                <div className="p-3 bg-[#0B0F17] rounded-xl border border-slate-800 text-slate-300 space-y-1">
+                  <p className="font-semibold text-white">Import direct sans clé d'API :</p>
+                  <p className="text-[11px] text-slate-400">
+                    Dans votre console Supabase, ouvrez <span className="font-bold text-slate-200">Table Editor &gt; profiles (ou auth.users)</span>, cliquez sur <strong>Export &gt; Export to JSON</strong> (ou CSV) puis collez le contenu ci-dessous.
+                  </p>
+                </div>
+
+                <textarea
+                  rows={8}
+                  value={supabaseJsonInput}
+                  onChange={(e) => setSupabaseJsonInput(e.target.value)}
+                  placeholder={`[
+  {
+    "id": "uuid-1",
+    "email": "prof@academie.ci",
+    "full_name": "Kouassi Jean",
+    "school_name": "Lycée Classique",
+    "phone_whatsapp": "+22507000000"
+  }
+]`}
+                  className="w-full bg-[#0B0F17] border border-slate-700 rounded-xl p-3 text-xs text-slate-200 font-mono focus:border-emerald-500 focus:outline-none"
+                />
+
+                <div className="flex justify-end gap-2 pt-2 border-t border-slate-800">
+                  <button
+                    type="button"
+                    onClick={() => setIsSupabaseModalOpen(false)}
+                    disabled={supabaseConnecting}
+                    className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl"
+                  >
+                    Fermer
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={supabaseConnecting || !supabaseJsonInput.trim()}
+                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-bold rounded-xl shadow-md flex items-center gap-1.5 cursor-pointer"
+                  >
+                    {supabaseConnecting ? (
+                      <>
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        <span>Importation en cours...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="w-3.5 h-3.5" />
+                        <span>Importer le JSON Supabase</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
         </div>
       )}
