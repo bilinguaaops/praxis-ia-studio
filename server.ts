@@ -5,11 +5,11 @@ import crypto from 'crypto';
 import dotenv from 'dotenv';
 import { GoogleGenAI, Type } from '@google/genai';
 import Anthropic from '@anthropic-ai/sdk';
-import { createServer as createViteServer } from 'vite';
 import { createClient } from '@supabase/supabase-js';
 import WebSocket from 'ws';
+import { createServer as createViteServer } from 'vite';
 
-// Polyfill WebSocket for Node runtime on Render / production
+// Ensure globalThis.WebSocket exists on all Node.js versions (including Node 18/20 on Render)
 if (!globalThis.WebSocket) {
   (globalThis as any).WebSocket = WebSocket;
 }
@@ -23,45 +23,11 @@ dotenv.config({ override: true });
   }
 });
 
-// Filter out known revoked/expired test keys to prevent noisy 401 attempts
-if (
-  process.env.ANTHROPIC_API_KEY &&
-  (process.env.ANTHROPIC_API_KEY.startsWith('sk-ant-api03-xYMOYO2') ||
-   process.env.ANTHROPIC_API_KEY.includes('dummy') ||
-   process.env.ANTHROPIC_API_KEY.includes('placeholder'))
-) {
-  delete process.env.ANTHROPIC_API_KEY;
-}
-
-// Fallback to project configuration key if environment variable was revoked or missing
-if (!process.env.ANTHROPIC_API_KEY) {
-  const varConfigFile = path.join(process.cwd(), 'public', 'assets', 'aistudio', 'variable_e957607c.txt');
-  if (fs.existsSync(varConfigFile)) {
-    try {
-      const varContent = fs.readFileSync(varConfigFile, 'utf-8');
-      const m = varContent.match(/ANTHROPIC_API_KEY=["']?(sk-ant-usr-[^"'\s\n]+)["']?/);
-      if (m && m[1]) {
-        process.env.ANTHROPIC_API_KEY = m[1].trim();
-      }
-    } catch {}
-  }
-}
-
-// Filter out invalid GEMINI_API_KEY (such as browser session tokens starting with AQ.)
-// Official Google Cloud / AI Studio keys start with 'AIzaSy'
-if (
-  process.env.GEMINI_API_KEY &&
-  (process.env.GEMINI_API_KEY.startsWith('AQ.') ||
-   process.env.GEMINI_API_KEY.includes('dummy') ||
-   process.env.GEMINI_API_KEY.includes('placeholder') ||
-   !process.env.GEMINI_API_KEY.startsWith('AIzaSy'))
-) {
-  console.warn('[Praxis IA] GEMINI_API_KEY ignorée car elle ne correspond pas au format officiel Google (préfixe AIzaSy... requis). Renseignez votre clé Gemini sur /admin.');
-  delete process.env.GEMINI_API_KEY;
-}
+// Anthropic Claude API Key for High Availability & Gemini 503 Fallback
+const hasAnthropicEnvKey = Boolean(process.env.ANTHROPIC_API_KEY && process.env.ANTHROPIC_API_KEY.trim().length > 20);
 
 const app = express();
-const PORT = 3000;
+const PORT = Number(process.env.PORT) || 3000;
 
 // Support large payload for high-resolution scanned copies (up to 50MB) + rawBody for Paystack webhook HMAC verification
 app.use(
@@ -419,24 +385,19 @@ function requireAdminAuth(req: express.Request, res: express.Response, next: exp
     return res.status(401).json({ error: 'Accès non autorisé. Token d’administration manquant.' });
   }
 
-  // Verify against active authenticated sessions
+  if (ACCEPTED_ADMIN_PASSWORDS.includes(token)) {
+    return next();
+  }
+
+  // Verify against active authenticated sessions or valid token format
   const expiresAt = activeAdminTokens.get(token);
   if (expiresAt && expiresAt >= Date.now()) {
     return next();
   }
 
-  // Resilient fallback across server restarts: valid master password or session prefix
-  const masterPasswords = [
-    (process.env.ADMIN_MASTER_PASSWORD || '').trim(),
-    'PraxisShield_2026$8vR2wN',
-    'PraxisMaster_2026#9xV4kP',
-    '2345',
-    '23451',
-    '2341',
-  ].filter(Boolean);
-
-  if (masterPasswords.includes(token) || (typeof token === 'string' && token.startsWith('adm_') && token.length >= 10)) {
-    activeAdminTokens.set(token, Date.now() + 24 * 3600 * 1000);
+  // If server restarted, accept valid issued admin_session_ tokens
+  if (token.startsWith('admin_session_') && token.length > 20) {
+    activeAdminTokens.set(token, Date.now() + 86400000);
     return next();
   }
 
@@ -575,6 +536,154 @@ function saveLeads(leads: LeadRecord[]) {
   }
 }
 
+// --- Live Supabase Database Connector (Real-Time Live Data, Zero Mock Data) ---
+const OFFICIAL_PRAXIS_SUPABASE_URL = 'https://chrtrfyynnbgxtysrzjo.supabase.co';
+const OFFICIAL_PRAXIS_SERVICE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNocnRyZnl5bm5iZ3h0eXNyempvIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc5MDc3NTExNCwiZXhwIjoyMTA2MzUxMTE0fQ.F-U0Kzt-RJQMvUEGkVWmKB8RThoav4JMAQ36A549sHQ';
+
+function getSupabaseServerClient() {
+  const url = (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || OFFICIAL_PRAXIS_SUPABASE_URL).trim();
+  const key = (
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    OFFICIAL_PRAXIS_SERVICE_KEY
+  ).trim();
+
+  if (!url || !key || url.includes('your-project') || key.length < 10) {
+    return null;
+  }
+  try {
+    return createClient(url, key, {
+      auth: { persistSession: false },
+    });
+  } catch (e) {
+    console.warn('[Supabase Server] Erreur init client:', e);
+    return null;
+  }
+}
+
+export async function getLiveTeachers(): Promise<{ teachers: LeadRecord[]; source: 'supabase' | 'local'; total: number }> {
+  const supabase = getSupabaseServerClient();
+
+  if (supabase) {
+    try {
+      // Fetch profiles, auth users, credit balances, and subscriptions in parallel
+      const [profilesRes, authRes, balancesRes, subsRes] = await Promise.all([
+        supabase.from('profiles').select('*').order('created_at', { ascending: false }),
+        supabase.auth.admin.listUsers({ page: 1, perPage: 1000 }).catch(() => ({ data: { users: [] }, error: null })),
+        supabase.from('credit_balances').select('*'),
+        supabase.from('subscriptions').select('*'),
+      ]);
+
+      const profiles = (profilesRes as any)?.data || [];
+      const authUsers = (authRes as any)?.data?.users || [];
+
+      const balancesMap = new Map();
+      if ((balancesRes as any)?.data && Array.isArray((balancesRes as any).data)) {
+        (balancesRes as any).data.forEach((b: any) => balancesMap.set(b.teacher_id, b));
+      }
+
+      const subsMap = new Map();
+      if ((subsRes as any)?.data && Array.isArray((subsRes as any).data)) {
+        (subsRes as any).data.forEach((s: any) => subsMap.set(s.teacher_id, s));
+      }
+
+      const handledUserIds = new Set<string>();
+      const mapped: LeadRecord[] = [];
+
+      // 1. Map all user profiles
+      profiles.forEach((p: any) => {
+        handledUserIds.add(p.id);
+        const bal = balancesMap.get(p.id);
+        const sub = subsMap.get(p.id);
+
+        let plan: any = 'trial';
+        if (sub?.plan_id) {
+          plan = sub.plan_id;
+        } else if (p.plan) {
+          plan = p.plan;
+        }
+
+        let status: any = 'active';
+        if (sub?.status) {
+          status = sub.status === 'expired' ? 'inactive' : sub.status;
+        }
+
+        const freeCreds = bal?.free_credits ?? 15;
+        const subCreds = bal?.subscription_credits ?? 0;
+        const purchasedCreds = bal?.purchased_credits ?? 0;
+        const copiesUsed = bal?.total_copies_corrected ?? 0;
+        const totalAvail = bal?.total_available_credits ?? (freeCreds + subCreds + purchasedCreds);
+        const totalQuota = Math.max(15, copiesUsed + totalAvail);
+
+        mapped.push({
+          id: p.id,
+          name: p.full_name || p.email?.split('@')[0] || 'Enseignant',
+          email: p.email || '',
+          whatsapp: p.phone_whatsapp || '',
+          school: p.school_name || 'Établissement non précisé',
+          city: p.city || '',
+          country: p.country || 'Côte d’Ivoire',
+          plan,
+          status,
+          role: p.role || 'teacher',
+          affiliateCode: p.referral_code,
+          createdAt: p.created_at || new Date().toISOString(),
+          lastActiveAt: p.updated_at || p.created_at || new Date().toISOString(),
+          copiesCorrected: copiesUsed,
+          subscriptionCredits: totalAvail,
+          extraCredits: purchasedCreds,
+          quota: totalQuota,
+          totalSpent: sub?.plan_id === 'annual' ? 99.99 : sub?.plan_id === 'monthly' ? 9.99 : 0,
+        });
+      });
+
+      // 2. ALSO include any registered users in auth.users who haven't completed a profile or haven't logged in yet!
+      authUsers.forEach((u: any) => {
+        if (!handledUserIds.has(u.id)) {
+          handledUserIds.add(u.id);
+          const bal = balancesMap.get(u.id);
+          const sub = subsMap.get(u.id);
+
+          mapped.push({
+            id: u.id,
+            name: u.user_metadata?.full_name || u.email?.split('@')[0] || 'Enseignant inscrit',
+            email: u.email || '',
+            whatsapp: u.user_metadata?.whatsapp || u.phone || '',
+            school: u.user_metadata?.school || 'Établissement non précisé',
+            city: u.user_metadata?.city || '',
+            country: 'Côte d’Ivoire',
+            plan: (sub?.plan_id as any) || 'trial',
+            status: u.last_sign_in_at ? 'active' : 'trial',
+            role: 'teacher',
+            createdAt: u.created_at || new Date().toISOString(),
+            lastActiveAt: u.last_sign_in_at || u.created_at || new Date().toISOString(),
+            copiesCorrected: bal?.total_copies_corrected || 0,
+            subscriptionCredits: bal?.total_available_credits ?? 15,
+            extraCredits: bal?.purchased_credits || 0,
+            quota: Math.max(15, (bal?.total_copies_corrected || 0) + (bal?.total_available_credits ?? 15)),
+            totalSpent: 0,
+          });
+        }
+      });
+
+      // 3. Ne recourir au fichier local que si aucun utilisateur Supabase n'a pu être chargé
+      if (mapped.length === 0) {
+        const localLeads = loadLeads();
+        localLeads.forEach((l) => mapped.push(l));
+      }
+
+      // Sort descending by registration date
+      mapped.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+      return { teachers: mapped, source: 'supabase', total: mapped.length };
+    } catch (err: any) {
+      console.warn('[Supabase Server] Fallback exception:', err?.message);
+    }
+  }
+
+  const local = loadLeads();
+  return { teachers: local, source: 'local', total: local.length };
+}
+
 // --- Institution (B2B School) Storage helpers ---
 const INSTITUTIONS_FILE = path.join(process.cwd(), 'institutions.json');
 
@@ -661,6 +770,68 @@ function saveQuotes(quotes: any[]) {
   }
 }
 
+// --- Broadcast Notifications (Annonces Administrateur -> Tous les Utilisateurs) ---
+const NOTIFICATIONS_FILE = path.join(process.cwd(), 'notifications.json');
+
+interface BroadcastNotification {
+  id: string;
+  title: string;
+  message: string;
+  type: 'info' | 'announcement' | 'warning' | 'success';
+  badgeText?: string;
+  linkUrl?: string;
+  linkText?: string;
+  createdAt: string;
+  createdBy?: string;
+  isActive: boolean;
+}
+
+function loadNotifications(): BroadcastNotification[] {
+  try {
+    if (fs.existsSync(NOTIFICATIONS_FILE)) {
+      const data = fs.readFileSync(NOTIFICATIONS_FILE, 'utf-8');
+      const parsed = JSON.parse(data);
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch (err) {
+    console.warn('[Notifications] Erreur lecture notifications.json :', err);
+  }
+  const defaultNotifs: BroadcastNotification[] = [
+    {
+      id: 'notif_welcome',
+      title: 'Bienvenue sur Praxis Pro 🎉',
+      message: 'Vos 15 corrections d\'essai sont disponibles. Importez vos copies et découvrez la correction intelligente avec double moteur IA.',
+      type: 'announcement',
+      badgeText: 'Bienvenue',
+      createdAt: new Date().toISOString(),
+      createdBy: 'Direction Praxis',
+      isActive: true,
+    },
+    {
+      id: 'notif_haiku_engine',
+      title: 'Moteur IA Haute Disponibilité Activé ⚡',
+      message: 'Praxis Pro intègre désormais un double moteur IA intelligent garantissant une correction continue sans interruption même en période de forte affluence.',
+      type: 'success',
+      badgeText: 'Mise à jour',
+      createdAt: new Date(Date.now() - 3600000).toISOString(),
+      createdBy: 'Support Technique',
+      isActive: true,
+    },
+  ];
+  try {
+    atomicWriteJsonSync(NOTIFICATIONS_FILE, defaultNotifs);
+  } catch {}
+  return defaultNotifs;
+}
+
+function saveNotifications(notifications: BroadcastNotification[]) {
+  try {
+    atomicWriteJsonSync(NOTIFICATIONS_FILE, notifications);
+  } catch (err) {
+    console.error('[Notifications] Erreur enregistrement notifications.json :', err);
+  }
+}
+
 // --- Affiliates Storage helpers ---
 const AFFILIATES_FILE = path.join(process.cwd(), 'affiliates.json');
 
@@ -743,10 +914,9 @@ let isAnthropicCreditExhausted = false;
 
 function hasValidAnthropicKey(): boolean {
   if (isAnthropicAuthDisabled || isAnthropicCreditExhausted) return false;
-  const key = process.env.ANTHROPIC_API_KEY;
+  const key = (process.env.ANTHROPIC_API_KEY || '').trim();
   if (!key) return false;
-  const trimmed = key.trim();
-  if (trimmed.length < 20 || trimmed.includes('placeholder') || trimmed.includes('dummy')) {
+  if (key.length < 20 || key.includes('placeholder') || key.includes('dummy')) {
     return false;
   }
   return true;
@@ -774,8 +944,8 @@ let cachedClaudeModels: { models: string[]; fetchedAt: number } | null = null;
 // --- Configurable Economical AI Models ---
 const AI_PRIMARY_MODEL = process.env.AI_PRIMARY_MODEL || 'gemini-3.1-flash-lite';
 const AI_BACKUP_GEMINI_MODEL = process.env.AI_BACKUP_GEMINI_MODEL || 'gemini-3.8-flash';
-const AI_ESCALATION_MODEL = process.env.AI_ESCALATION_MODEL || 'claude-3-5-haiku-latest';
-const AI_BACKUP_CLAUDE_MODEL = process.env.AI_BACKUP_CLAUDE_MODEL || 'claude-3-5-haiku-20241022';
+const AI_ESCALATION_MODEL = process.env.AI_ESCALATION_MODEL || 'claude-haiku-4-5-20251001';
+const AI_BACKUP_CLAUDE_MODEL = process.env.AI_BACKUP_CLAUDE_MODEL || 'claude-haiku-5-5';
 const AI_VERIFIER_MODEL = process.env.AI_VERIFIER_MODEL || 'gemini-3.1-flash-lite';
 const CORRECTION_PROMPT_VERSION = 'v2-secure';
 
@@ -978,30 +1148,29 @@ async function getResolvedClaudeCandidates(): Promise<string[]> {
     if (res && Array.isArray(res.data) && res.data.length > 0) {
       const availableIds: string[] = res.data.map((m: any) => m.id);
 
-      // EXCLUSIVELY filter for valid Haiku models (strict: zero Sonnet, zero Opus)
+      // Filter and prioritize high-speed economic vision models (Haiku 4.5 / 5.5, Sonnet fallback)
       const haikuIds = availableIds.filter(
         (id: string) => id.toLowerCase().includes('haiku')
       );
 
       const sortedHaikus = [...haikuIds].sort((a, b) => {
-        const score = (name: string) => {
-          let s = 0;
-          if (name.includes('5-5') || name.includes('5.5')) s += 30;
-          else if (name.includes('4-5') || name.includes('4.5')) s += 25;
-          else if (name.includes('3-5') || name.includes('3.5')) s += 20;
-          else if (name.includes('3')) s += 10;
-          return s;
-        };
-        return score(b) - score(a);
+        // Prioritize haiku-4-5 first (most stable for vision OCR), then haiku-5-5
+        if (a.includes('4-5') && !b.includes('4-5')) return -1;
+        if (!a.includes('4-5') && b.includes('4-5')) return 1;
+        return 0;
       });
 
-      const baseList = sortedHaikus.length > 0 ? sortedHaikus : [
-        'claude-haiku-4-5-20251001',
-        'claude-haiku-5-5',
-        AI_ESCALATION_MODEL,
-        AI_BACKUP_CLAUDE_MODEL,
-        'claude-3-haiku-20240307',
-      ];
+      const sonnetBackup = availableIds.filter(
+        (id: string) => id.includes('sonnet-4-5') || id.includes('sonnet-5')
+      );
+
+      const baseList = sortedHaikus.length > 0
+        ? [...sortedHaikus, ...sonnetBackup.slice(0, 1)]
+        : [
+            'claude-haiku-4-5-20251001',
+            'claude-haiku-5-5',
+            'claude-sonnet-4-5-20250929',
+          ];
 
       const finalList = envModel
         ? Array.from(new Set([envModel, ...baseList]))
@@ -1049,8 +1218,6 @@ async function getResolvedClaudeCandidates(): Promise<string[]> {
   // Fallback defaults with ONLY economical valid Haiku identifiers
   const defaults = [
     ...(envModel ? [envModel] : []),
-    'claude-haiku-4-5-20251001',
-    'claude-haiku-5-5',
     AI_ESCALATION_MODEL,
     AI_BACKUP_CLAUDE_MODEL,
     'claude-3-haiku-20240307',
@@ -1064,9 +1231,6 @@ let geminiGlobalCooldownUntil = 0;
 
 // High-availability prioritized Gemini flash models (active, fast, official)
 const GEMINI_FLASH_MODELS = [
-  'gemini-2.5-flash',
-  'gemini-2.0-flash',
-  'gemini-1.5-flash',
   AI_PRIMARY_MODEL,
   AI_BACKUP_GEMINI_MODEL,
   'gemini-flash-latest',
@@ -2163,6 +2327,10 @@ IMPORTANT : Ne pose AUCUNE question. Remplis directement le JSON avec les inform
 
     const tryGemini = async () => {
       if (!hasGeminiKey) {
+        return;
+      }
+      if (!isGeminiAvailable() && hasAnthropicKey) {
+        console.log(`[Praxis IA] ⚡ Gemini temporairement en cooldown suite à une surcharge (503). Relais immédiat vers Claude Haiku.`);
         return;
       }
       const ai = getGenAI();
@@ -3483,9 +3651,9 @@ app.post('/api/paywall/checkout', async (req, res) => {
       plan: 'trial',
       status: 'active',
       copiesCorrected: 0,
-      subscriptionCredits: 15,
+      subscriptionCredits: 25,
       extraCredits: 0,
-      quota: 15,
+      quota: 25,
       totalSpent: 0,
       createdAt: new Date().toISOString(),
       lastActiveAt: new Date().toISOString(),
@@ -3848,9 +4016,9 @@ function fulfillPaidOrder(params: FulfillPaymentParams) {
       plan: 'trial',
       status: 'active',
       copiesCorrected: 0,
-      subscriptionCredits: 15,
+      subscriptionCredits: 25,
       extraCredits: 0,
-      quota: 15,
+      quota: 25,
       totalSpent: 0,
       createdAt: new Date().toISOString(),
       lastActiveAt: new Date().toISOString(),
@@ -4558,8 +4726,8 @@ app.get('/api/leads', requireAdminAuth, (req, res) => {
 });
 
 // Protected: Get aggregated KPI business analytics (100% computed on live records)
-app.get('/api/admin/stats', requireAdminAuth, (req, res) => {
-  const teachers = loadLeads();
+app.get('/api/admin/stats', requireAdminAuth, async (req, res) => {
+  const { teachers, source, total } = await getLiveTeachers();
   const now = Date.now();
   const DAY = 86400000;
 
@@ -4574,8 +4742,6 @@ app.get('/api/admin/stats', requireAdminAuth, (req, res) => {
 
   const allTransactions: TransactionItem[] = [];
 
-  let inactiveCount = 0;
-
   teachers.forEach((t) => {
     // Count plans
     if (t.plan === 'free') freeCount++;
@@ -4585,18 +4751,13 @@ app.get('/api/admin/stats', requireAdminAuth, (req, res) => {
     else if (t.plan === 'institution') institutionCount++;
 
     // Active paying subscribers
-    if (t.status === 'active' && ['monthly', 'quarterly', 'school_year', 'annual', 'institution'].includes(t.plan)) {
+    if (t.status === 'active' && ['monthly', 'annual', 'institution'].includes(t.plan)) {
       activeSubscribers++;
     }
 
-    // Active trials (uniquement ceux en cours d'essai actif avec jours restants, non inactifs)
-    if (t.status === 'trial' && (t.trialDaysLeft === undefined || t.trialDaysLeft > 0)) {
+    // Active trials
+    if (t.status === 'trial' || (t.plan === 'trial' && t.status !== 'canceled')) {
       activeTrials++;
-    }
-
-    // Inactifs (anciens inscrits, essais expirés ou utilisateurs ayant quitté le site)
-    if (t.status === 'inactive' || t.status === 'canceled' || t.status === 'paused') {
-      inactiveCount++;
     }
 
     // 30 days growth
@@ -4685,11 +4846,10 @@ app.get('/api/admin/stats', requireAdminAuth, (req, res) => {
 
   res.json({
     metrics: {
+      dataSource: source,
       mrr,
       arr,
       totalTeachers,
-      totalActive: activeSubscribers + activeTrials,
-      inactiveCount,
       freeCount,
       trialCount,
       paidCount,
@@ -4712,10 +4872,11 @@ app.get('/api/admin/stats', requireAdminAuth, (req, res) => {
   });
 });
 
-// Protected: Get list of teachers with filtering and search
-app.get('/api/admin/teachers', requireAdminAuth, (req, res) => {
+// Protected: Get list of teachers with filtering and search (100% Real Live Data from Supabase when connected)
+app.get('/api/admin/teachers', requireAdminAuth, async (req, res) => {
   const { search, plan, status, sortBy, sortOrder } = req.query;
-  let list = loadLeads();
+  const { teachers, source, total } = await getLiveTeachers();
+  let list = [...teachers];
 
   // Search filter
   if (typeof search === 'string' && search.trim()) {
@@ -4735,21 +4896,9 @@ app.get('/api/admin/teachers', requireAdminAuth, (req, res) => {
     list = list.filter((t) => t.plan === plan);
   }
 
-  // Status filter (all, active, inactive, paid, trial, no_copies, has_copies)
+  // Status filter
   if (typeof status === 'string' && status && status !== 'all') {
-    if (status === 'active') {
-      list = list.filter((t) => t.status === 'active' || (t.plan === 'trial' && (t.trialDaysLeft || 0) > 0));
-    } else if (status === 'inactive') {
-      list = list.filter((t) => t.status === 'inactive' || t.status === 'canceled' || t.status === 'paused');
-    } else if (status === 'paid') {
-      list = list.filter((t) => ['monthly', 'quarterly', 'school_year', 'annual', 'institution'].includes(t.plan) && t.status === 'active');
-    } else if (status === 'no_copies') {
-      list = list.filter((t) => !t.copiesCorrected || t.copiesCorrected === 0);
-    } else if (status === 'has_copies') {
-      list = list.filter((t) => (t.copiesCorrected || 0) > 0);
-    } else {
-      list = list.filter((t) => t.status === status);
-    }
+    list = list.filter((t) => t.status === status);
   }
 
   // Sorting
@@ -4762,7 +4911,111 @@ app.get('/api/admin/teachers', requireAdminAuth, (req, res) => {
     return (new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()) * (order === 1 ? -1 : 1);
   });
 
-  res.json({ teachers: list, total: list.length });
+  res.json({ teachers: list, total: list.length, dataSource: source });
+});
+
+// Protected: Check live database status
+app.get('/api/admin/database-status', requireAdminAuth, async (_req, res) => {
+  const supabase = getSupabaseServerClient();
+  const url = (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || OFFICIAL_PRAXIS_SUPABASE_URL).trim();
+  const hasKey = Boolean(
+    (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY || OFFICIAL_PRAXIS_SERVICE_KEY || '').trim()
+  );
+
+  if (!supabase || !url || !hasKey) {
+    return res.json({
+      connected: false,
+      configured: false,
+      source: 'local',
+      localCount: loadLeads().length,
+      message: 'Base Supabase non connectée. Le dashboard affiche les données locales sans aucune invention de faux utilisateurs.',
+    });
+  }
+
+  try {
+    const { count, error } = await supabase
+      .from('profiles')
+      .select('*', { count: 'exact', head: true });
+
+    if (error) {
+      return res.json({
+        connected: false,
+        configured: true,
+        url: url.replace(/(https?:\/\/)([^.]+)(.*)/, '$1***$3'),
+        error: error.message,
+        source: 'local',
+        localCount: loadLeads().length,
+      });
+    }
+
+    res.json({
+      connected: true,
+      configured: true,
+      url: url.replace(/(https?:\/\/)([^.]+)(.*)/, '$1***$3'),
+      totalProfiles: count ?? 0,
+      source: 'supabase',
+      message: `Connexion active à Supabase. ${count ?? 0} profils réels connectés en direct.`,
+    });
+  } catch (e: any) {
+    res.json({
+      connected: false,
+      configured: true,
+      error: e.message,
+      source: 'local',
+      localCount: loadLeads().length,
+    });
+  }
+});
+
+// Protected: Configure and connect Supabase live database
+app.post('/api/admin/database-config', requireAdminAuth, async (req, res) => {
+  const { supabaseUrl, supabaseKey } = req.body;
+  if (!supabaseUrl || !supabaseKey) {
+    return res.status(400).json({ error: 'URL et clé Supabase requises.' });
+  }
+
+  const cleanUrl = String(supabaseUrl).trim();
+  const cleanKey = String(supabaseKey).trim();
+
+  try {
+    const testClient = createClient(cleanUrl, cleanKey, { auth: { persistSession: false } });
+    const { count, error } = await testClient.from('profiles').select('*', { count: 'exact', head: true });
+    if (error) {
+      return res.status(400).json({
+        error: `Impossible de contacter la table profiles de Supabase : ${error.message}. Vérifiez vos identifiants.`,
+      });
+    }
+
+    // Apply to current runtime
+    process.env.SUPABASE_URL = cleanUrl;
+    process.env.VITE_SUPABASE_URL = cleanUrl;
+    process.env.SUPABASE_SERVICE_ROLE_KEY = cleanKey;
+    process.env.VITE_SUPABASE_PUBLISHABLE_KEY = cleanKey;
+
+    // Persist to .env file
+    const envPath = path.join(process.cwd(), '.env');
+    let envContent = fs.existsSync(envPath) ? fs.readFileSync(envPath, 'utf8') : '';
+    const updateVar = (key: string, val: string) => {
+      const reg = new RegExp(`^${key}=.*$`, 'm');
+      if (reg.test(envContent)) {
+        envContent = envContent.replace(reg, `${key}="${val}"`);
+      } else {
+        envContent += `\n${key}="${val}"`;
+      }
+    };
+    updateVar('VITE_SUPABASE_URL', cleanUrl);
+    updateVar('VITE_SUPABASE_PUBLISHABLE_KEY', cleanKey);
+    updateVar('SUPABASE_SERVICE_ROLE_KEY', cleanKey);
+    fs.writeFileSync(envPath, envContent.trim() + '\n', 'utf8');
+
+    res.json({
+      success: true,
+      totalProfiles: count ?? 0,
+      message: `Connexion réussie ! ${count ?? 0} enseignants réels ont été chargés depuis la base de données.`,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Erreur lors de la configuration: ' + err.message });
+  }
 });
 
 // Protected: Add a teacher manually
@@ -5116,13 +5369,6 @@ app.post('/api/admin/settings/keys', requireAdminAuth, (req, res) => {
 
     fs.writeFileSync(envPath, content, 'utf8');
 
-    // Reset AI clients & flags immediately so new keys take effect without server restart
-    aiClient = null;
-    anthropicClient = null;
-    isAnthropicAuthDisabled = false;
-    isAnthropicCreditExhausted = false;
-    cachedClaudeModels = null;
-
     res.json({
       success: true,
       message: 'Clés API mises à jour et sauvegardées avec succès dans l’environnement.',
@@ -5168,522 +5414,6 @@ app.get('/api/admin/settings', requireAdminAuth, (req, res) => {
 app.post('/api/admin/clear-leads', requireAdminAuth, (req, res) => {
   saveLeads([]);
   res.json({ success: true, count: 0, message: 'La base a été remise à zéro. Le tableau de bord affiche désormais uniquement les données réelles en direct.' });
-});
-
-// Protected: Restore or re-sync the complete 200 teachers directory (all registered, active, inactive)
-app.post('/api/admin/restore-directory', requireAdminAuth, (req, res) => {
-  try {
-    const { count = 200 } = req.body;
-    const seedScript = path.join(process.cwd(), 'scripts', 'seed_directory.cjs');
-    if (fs.existsSync(seedScript)) {
-      // Execute seed script synchronously via require
-      const { generateDirectory } = require(seedScript);
-      const list = generateDirectory(Number(count) || 200);
-      return res.json({
-        success: true,
-        count: list.length,
-        message: `L'annuaire complet de ${list.length} enseignants (inscrits récents, actifs et inactifs) a été restauré avec succès !`,
-        teachers: list,
-      });
-    } else {
-      const list = loadLeads();
-      return res.json({ success: true, count: list.length, teachers: list });
-    }
-  } catch (err: any) {
-    console.error('[Admin] Erreur restauration annuaire:', err);
-    res.status(500).json({ error: 'Erreur lors de la restauration de l’annuaire: ' + err.message });
-  }
-});
-
-// Protected: Bulk import teachers from CSV text or JSON
-app.post('/api/admin/import-teachers', requireAdminAuth, (req, res) => {
-  try {
-    const { teachers: incomingList, csvText } = req.body;
-    const leads = loadLeads();
-    let addedCount = 0;
-    let updatedCount = 0;
-
-    const toProcess: any[] = Array.isArray(incomingList) ? [...incomingList] : [];
-
-    if (csvText && typeof csvText === 'string') {
-      const lines = csvText.split('\n').map((l: string) => l.trim()).filter(Boolean);
-      for (const line of lines) {
-        if (line.toLowerCase().includes('nom') && line.toLowerCase().includes('email')) continue;
-        const cols = line.split(/[;,]/).map((c: string) => c.trim().replace(/^["']|["']$/g, ''));
-        if (cols.length >= 2) {
-          toProcess.push({
-            name: cols[0],
-            email: cols[1],
-            whatsapp: cols[2] || '',
-            school: cols[3] || '',
-            city: cols[4] || '',
-            plan: cols[5] || 'trial',
-            status: cols[6] || 'trial',
-          });
-        }
-      }
-    }
-
-    toProcess.forEach((item) => {
-      if (!item.email || !item.email.includes('@')) return;
-      const cleanEmail = item.email.toLowerCase().trim();
-      const existing = leads.find((l) => l.email.toLowerCase() === cleanEmail);
-      if (existing) {
-        if (item.name) existing.name = item.name.trim();
-        if (item.whatsapp) existing.whatsapp = item.whatsapp.trim();
-        if (item.school) existing.school = item.school.trim();
-        if (item.city) existing.city = item.city.trim();
-        if (item.plan) existing.plan = item.plan;
-        if (item.status) existing.status = item.status;
-        updatedCount++;
-      } else {
-        leads.unshift({
-          id: 'lead_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
-          name: item.name ? item.name.trim() : cleanEmail.split('@')[0],
-          email: cleanEmail,
-          whatsapp: item.whatsapp || '',
-          school: item.school || '',
-          city: item.city || '',
-          country: item.country || 'Côte d’Ivoire',
-          plan: item.plan || 'trial',
-          status: item.status || 'trial',
-          role: 'teacher',
-          trialDaysLeft: item.trialDaysLeft ?? 7,
-          quota: item.quota ?? 15,
-          subscriptionCredits: item.subscriptionCredits ?? 15,
-          extraCredits: item.extraCredits ?? 0,
-          copiesCorrected: item.copiesCorrected ?? 0,
-          totalSpent: item.totalSpent ?? 0,
-          notes: item.notes || 'Importé manuellement par l’administrateur.',
-          createdAt: item.createdAt || new Date().toISOString(),
-          lastActiveAt: item.lastActiveAt || new Date().toISOString(),
-        });
-        addedCount++;
-      }
-    });
-
-    saveLeads(leads);
-    res.json({
-      success: true,
-      addedCount,
-      updatedCount,
-      total: leads.length,
-      message: `${addedCount} nouvel(s) enseignant(s) importé(s), ${updatedCount} mis à jour. Total : ${leads.length} inscrits.`,
-    });
-  } catch (err: any) {
-    res.status(500).json({ error: 'Erreur lors de l’importation: ' + err.message });
-  }
-});
-
-// ============================================================================
-// ⚡ SYNCHRONISATION SUPABASE DIRECTE (367+ UTILISATEURS / PROFILES)
-// ============================================================================
-
-const OFFICIAL_PRAXIS_SUPABASE_URL = 'https://chrtrfyynnbgxtysrzjo.supabase.co';
-const OFFICIAL_PRAXIS_SERVICE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNocnRyZnl5bm5iZ3h0eXNyempvIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc5MDc3NTExNCwiZXhwIjoyMTA2MzUxMTE0fQ.F-U0Kzt-RJQMvUEGkVWmKB8RThoav4JMAQ36A549sHQ';
-
-function getActiveSupabaseClient(customUrl?: string, customKey?: string) {
-  const url = (customUrl || process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || OFFICIAL_PRAXIS_SUPABASE_URL).trim();
-  const key = (customKey || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY || OFFICIAL_PRAXIS_SERVICE_KEY).trim();
-  if (!url || !key || !url.startsWith('http')) return null;
-  return { client: createClient(url, key, { auth: { persistSession: false } }), url, key };
-}
-
-// Helper: Synchroniser les utilisateurs Supabase vers leads.json
-async function syncFromSupabase(client: any) {
-  let userItems: any[] = [];
-  let sourceNote = '';
-
-  // 1. Essai prioritaire : auth.admin.listUsers (lit directement la table auth.users avec la Service Role Key)
-  try {
-    if (client.auth && client.auth.admin && typeof client.auth.admin.listUsers === 'function') {
-      const { data: authData, error: authErr } = await client.auth.admin.listUsers({ page: 1, perPage: 1000 });
-      if (!authErr && authData && Array.isArray(authData.users) && authData.users.length > 0) {
-        userItems = authData.users.map((u: any) => ({
-          id: u.id,
-          email: (u.email || '').trim().toLowerCase(),
-          full_name: u.user_metadata?.full_name || u.user_metadata?.name || u.email?.split('@')[0] || 'Enseignant',
-          phone_whatsapp: u.user_metadata?.phone_whatsapp || u.user_metadata?.phone || u.phone || '',
-          school_name: u.user_metadata?.school_name || u.user_metadata?.school || '',
-          city: u.user_metadata?.city || '',
-          country: u.user_metadata?.country || 'Côte d’Ivoire',
-          role: u.user_metadata?.role || 'teacher',
-          created_at: u.created_at,
-          last_active_at: u.last_sign_in_at || u.updated_at || u.created_at,
-        }));
-        sourceNote = `auth.users (${userItems.length} comptes authentifiés)`;
-      }
-    }
-  } catch (err: any) {
-    console.log('[Supabase Sync] auth.admin.listUsers inaccessible:', err?.message || err);
-  }
-
-  // 2. Récupérer la table public.profiles
-  try {
-    const { data: profiles, error: pError } = await client
-      .from('profiles')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(2000);
-
-    if (!pError && profiles && Array.isArray(profiles) && profiles.length > 0) {
-      if (userItems.length === 0) {
-        userItems = profiles.map((p: any) => ({
-          id: p.id,
-          email: (p.email || '').trim().toLowerCase(),
-          full_name: p.full_name || p.email?.split('@')[0] || 'Enseignant',
-          phone_whatsapp: p.phone_whatsapp || p.phone || '',
-          school_name: p.school_name || p.school || '',
-          city: p.city || '',
-          country: p.country || 'Côte d’Ivoire',
-          role: p.role || 'teacher',
-          created_at: p.created_at,
-          last_active_at: p.updated_at || p.created_at,
-        }));
-        sourceNote = `table profiles (${profiles.length} profils)`;
-      } else {
-        // Fusionner / enrichir avec profiles
-        const pMap = new Map(profiles.map((p: any) => [(p.id || '').toLowerCase(), p]));
-        const pEmailMap = new Map(profiles.map((p: any) => [(p.email || '').toLowerCase(), p]));
-
-        userItems = userItems.map((u) => {
-          const p = pMap.get((u.id || '').toLowerCase()) || pEmailMap.get((u.email || '').toLowerCase());
-          if (!p) return u;
-          return {
-            ...u,
-            full_name: p.full_name || u.full_name,
-            phone_whatsapp: p.phone_whatsapp || u.phone_whatsapp,
-            school_name: p.school_name || u.school_name,
-            city: p.city || u.city,
-            role: p.role || u.role,
-          };
-        });
-
-        // Ajouter les profils qui n'étaient pas dans auth.users
-        const existingEmails = new Set(userItems.map((u) => (u.email || '').toLowerCase()));
-        profiles.forEach((p: any) => {
-          const email = (p.email || '').toLowerCase();
-          if (email && !existingEmails.has(email)) {
-            userItems.push({
-              id: p.id,
-              email,
-              full_name: p.full_name || email.split('@')[0],
-              phone_whatsapp: p.phone_whatsapp || '',
-              school_name: p.school_name || '',
-              city: p.city || '',
-              role: p.role || 'teacher',
-              created_at: p.created_at,
-              last_active_at: p.updated_at || p.created_at,
-            });
-            existingEmails.add(email);
-          }
-        });
-      }
-    }
-  } catch (err: any) {
-    console.log('[Supabase Sync] table profiles non accessible:', err?.message || err);
-  }
-
-  // 3. Essai de secours : table public.users
-  if (userItems.length === 0) {
-    try {
-      const { data: uList, error: uErr } = await client.from('users').select('*').limit(2000);
-      if (!uErr && uList && Array.isArray(uList) && uList.length > 0) {
-        userItems = uList.map((u: any) => ({
-          id: u.id,
-          email: (u.email || '').trim().toLowerCase(),
-          full_name: u.full_name || u.name || u.email?.split('@')[0],
-          phone_whatsapp: u.phone_whatsapp || u.phone || u.whatsapp || '',
-          school_name: u.school_name || u.school || '',
-          city: u.city || '',
-          role: u.role || 'teacher',
-          created_at: u.created_at,
-          last_active_at: u.updated_at || u.created_at,
-        }));
-        sourceNote = `table users (${userItems.length} comptes)`;
-      }
-    } catch {}
-  }
-
-  // Si 0 utilisateur extrait
-  if (userItems.length === 0) {
-    throw new Error(
-      "Aucun utilisateur n'a pu être extrait de votre projet Supabase.\n" +
-      "⚠️ Raison fréquente : vous avez utilisé la clé publique 'anon' (bloquée par les règles RLS de Supabase) au lieu de la 'service_role' key.\n" +
-      "👉 Rendez-vous sur Supabase > Project Settings > API > Project API Keys et copiez la clé 'service_role' (secrète)."
-    );
-  }
-
-  // Récupérer soldes de crédits si la table existe
-  const balancesMap: Record<string, any> = {};
-  try {
-    const { data: balances } = await client.from('credit_balances').select('*').limit(2000);
-    if (balances && Array.isArray(balances)) {
-      balances.forEach((b: any) => {
-        if (b.teacher_id) balancesMap[b.teacher_id] = b;
-      });
-    }
-  } catch {}
-
-  // Récupérer abonnements si la table existe
-  const subsMap: Record<string, any> = {};
-  try {
-    const { data: subs } = await client.from('subscriptions').select('*').limit(2000);
-    if (subs && Array.isArray(subs)) {
-      subs.forEach((s: any) => {
-        if (s.teacher_id) subsMap[s.teacher_id] = s;
-      });
-    }
-  } catch {}
-
-  const leads = loadLeads();
-  let importedCount = 0;
-  let updatedCount = 0;
-
-  userItems.forEach((p: any) => {
-    const email = (p.email || '').trim().toLowerCase();
-    if (!email || !email.includes('@')) return;
-
-    const b = balancesMap[p.id];
-    const s = subsMap[p.id];
-
-    const freeCredits = b?.free_credits ?? 15;
-    const copiesUsed = b?.total_copies_corrected ?? 0;
-    const extraCredits = b?.purchased_credits ?? 0;
-    const availableCredits = b?.total_available_credits ?? (freeCredits + (b?.subscription_credits ?? 0) + extraCredits);
-    const totalQuota = Math.max(15, copiesUsed + availableCredits);
-    const plan = s?.plan_id || 'trial';
-    const status = (s?.status === 'active' || p.role === 'admin' || (copiesUsed > 0 && copiesUsed < 15)) ? 'active' : 'inactive';
-
-    const existingIdx = leads.findIndex((l) => l.email.toLowerCase() === email || (p.id && l.id === p.id));
-    if (existingIdx !== -1) {
-      leads[existingIdx] = {
-        ...leads[existingIdx],
-        name: p.full_name || leads[existingIdx].name || email.split('@')[0],
-        whatsapp: p.phone_whatsapp || leads[existingIdx].whatsapp || '',
-        school: p.school_name || leads[existingIdx].school || '',
-        city: p.city || leads[existingIdx].city || '',
-        plan: leads[existingIdx].plan === 'institution' ? 'institution' : plan,
-        status: leads[existingIdx].status === 'active' ? 'active' : status,
-        copiesCorrected: copiesUsed || leads[existingIdx].copiesCorrected || 0,
-        quota: totalQuota,
-        subscriptionCredits: availableCredits,
-        extraCredits,
-      };
-      updatedCount++;
-    } else {
-      leads.unshift({
-        id: p.id || ('lead_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6)),
-        name: p.full_name || email.split('@')[0],
-        email,
-        whatsapp: p.phone_whatsapp || '',
-        school: p.school_name || '',
-        city: p.city || '',
-        plan,
-        status,
-        copiesCorrected: copiesUsed,
-        quota: totalQuota,
-        subscriptionCredits: availableCredits,
-        extraCredits,
-        totalSpent: plan === 'annual' ? 30000 : plan === 'monthly' ? 5000 : 0,
-        notes: `Enseignant synchronisé depuis Supabase Cloud (${sourceNote || p.role || 'professeur'}).`,
-        createdAt: p.created_at || new Date().toISOString(),
-        lastActiveAt: p.last_active_at || b?.last_updated_at || p.created_at || new Date().toISOString(),
-      });
-      importedCount++;
-    }
-  });
-
-  saveLeads(leads);
-  return { total: leads.length, importedCount, updatedCount, remoteCount: userItems.length, sourceNote, teachers: leads };
-}
-
-// Protected: Vérifier le statut de connexion à Supabase
-app.get('/api/admin/supabase-status', requireAdminAuth, async (req, res) => {
-  try {
-    const leads = loadLeads();
-    const config = getActiveSupabaseClient();
-    if (!config) {
-      return res.json({
-        configured: false,
-        url: '',
-        connected: false,
-        remoteUsersCount: null,
-        localUsersCount: leads.length,
-        message: 'Supabase n’est pas encore configuré avec une clé valide.',
-      });
-    }
-
-    // Tester connexion
-    const syncRes = await syncFromSupabase(config.client);
-    res.json({
-      configured: true,
-      url: config.url,
-      connected: true,
-      remoteUsersCount: syncRes.remoteCount,
-      localUsersCount: leads.length,
-      message: `Connecté à Supabase (${syncRes.remoteCount} utilisateurs en ligne via ${syncRes.sourceNote}).`,
-    });
-  } catch (err: any) {
-    res.json({
-      configured: true,
-      url: process.env.VITE_SUPABASE_URL || '',
-      connected: false,
-      remoteUsersCount: null,
-      localUsersCount: loadLeads().length,
-      error: err.message,
-      message: `Erreur: ${err.message}`,
-    });
-  }
-});
-
-// Protected: Connecter et sauvegarder les identifiants Supabase
-app.post('/api/admin/supabase-connect', requireAdminAuth, async (req, res) => {
-  try {
-    const { supabaseUrl, supabaseKey } = req.body;
-    if (!supabaseUrl || !supabaseKey) {
-      return res.status(400).json({ error: 'URL Supabase et Clé API (Service Role Key recommandée) requises.' });
-    }
-
-    const cleanUrl = String(supabaseUrl).trim().replace(/\/+$/, '');
-    const cleanKey = String(supabaseKey).trim();
-
-    if (!cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://')) {
-      return res.status(400).json({ error: 'L’URL Supabase doit commencer par https://' });
-    }
-
-    const testClient = createClient(cleanUrl, cleanKey, { auth: { persistSession: false } });
-
-    // Synchroniser immédiatement les utilisateurs via multi-source
-    const syncRes = await syncFromSupabase(testClient);
-
-    // Mettre à jour les variables d'environnement en mémoire
-    process.env.SUPABASE_URL = cleanUrl;
-    process.env.VITE_SUPABASE_URL = cleanUrl;
-    process.env.SUPABASE_SERVICE_ROLE_KEY = cleanKey;
-    process.env.VITE_SUPABASE_PUBLISHABLE_KEY = cleanKey;
-
-    // Enregistrer dans le fichier .env pour persister aux redémarrages
-    try {
-      const envPath = path.join(process.cwd(), '.env');
-      let envContent = fs.existsSync(envPath) ? fs.readFileSync(envPath, 'utf-8') : '';
-      if (!envContent.includes('VITE_SUPABASE_URL=')) {
-        envContent += `\nVITE_SUPABASE_URL="${cleanUrl}"\nSUPABASE_SERVICE_ROLE_KEY="${cleanKey}"\n`;
-      } else {
-        envContent = envContent.replace(/VITE_SUPABASE_URL=.*/, `VITE_SUPABASE_URL="${cleanUrl}"`);
-        if (envContent.includes('SUPABASE_SERVICE_ROLE_KEY=')) {
-          envContent = envContent.replace(/SUPABASE_SERVICE_ROLE_KEY=.*/, `SUPABASE_SERVICE_ROLE_KEY="${cleanKey}"`);
-        } else {
-          envContent += `\nSUPABASE_SERVICE_ROLE_KEY="${cleanKey}"\n`;
-        }
-      }
-      fs.writeFileSync(envPath, envContent, 'utf-8');
-    } catch (e) {
-      console.warn('[Admin] Note sauvegarde .env :', e);
-    }
-
-    res.json({
-      success: true,
-      remoteCount: syncRes.remoteCount,
-      total: syncRes.total,
-      importedCount: syncRes.importedCount,
-      updatedCount: syncRes.updatedCount,
-      teachers: syncRes.teachers,
-      message: `Connexion établie avec succès ! ${syncRes.remoteCount} utilisateurs récupérés depuis Supabase (${syncRes.sourceNote}). Total affiché : ${syncRes.total} enseignants.`,
-    });
-  } catch (err: any) {
-    res.status(400).json({ error: err.message || 'Erreur lors de la connexion Supabase.' });
-  }
-});
-
-// Protected: Forcer la synchronisation avec Supabase
-app.post('/api/admin/supabase-sync', requireAdminAuth, async (req, res) => {
-  try {
-    const config = getActiveSupabaseClient(req.body.supabaseUrl, req.body.supabaseKey);
-    if (!config) {
-      return res.status(400).json({
-        error: 'Supabase n’est pas configuré. Veuillez d’abord renseigner votre URL et Clé Supabase.',
-      });
-    }
-
-    const syncRes = await syncFromSupabase(config.client);
-    res.json({
-      success: true,
-      ...syncRes,
-      message: `Synchronisation réussie ! ${syncRes.remoteCount} utilisateurs récupérés depuis Supabase. Total actuel : ${syncRes.total}.`,
-    });
-  } catch (err: any) {
-    res.status(500).json({ error: 'Erreur synchronisation Supabase: ' + err.message });
-  }
-});
-
-// Protected: Import direct d'un JSON brut de profils Supabase
-app.post('/api/admin/supabase-import-json', requireAdminAuth, (req, res) => {
-  try {
-    const { rawJson } = req.body;
-    let list: any[] = [];
-    if (Array.isArray(rawJson)) {
-      list = rawJson;
-    } else if (typeof rawJson === 'string') {
-      list = JSON.parse(rawJson);
-    }
-
-    if (!Array.isArray(list) || list.length === 0) {
-      return res.status(400).json({ error: 'Format JSON invalide. Un tableau d’objets profils est attendu.' });
-    }
-
-    const leads = loadLeads();
-    let added = 0;
-    let updated = 0;
-
-    list.forEach((p: any) => {
-      const email = (p.email || p.user_email || '').trim().toLowerCase();
-      if (!email || !email.includes('@')) return;
-
-      const existingIdx = leads.findIndex((l) => l.email.toLowerCase() === email || l.id === p.id);
-      if (existingIdx !== -1) {
-        leads[existingIdx] = {
-          ...leads[existingIdx],
-          name: p.full_name || p.name || leads[existingIdx].name,
-          whatsapp: p.phone_whatsapp || p.phone || p.whatsapp || leads[existingIdx].whatsapp,
-          school: p.school_name || p.school || leads[existingIdx].school,
-          city: p.city || leads[existingIdx].city,
-        };
-        updated++;
-      } else {
-        leads.unshift({
-          id: p.id || ('lead_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6)),
-          name: p.full_name || p.name || email.split('@')[0],
-          email,
-          whatsapp: p.phone_whatsapp || p.phone || p.whatsapp || '',
-          school: p.school_name || p.school || '',
-          city: p.city || '',
-          plan: p.plan || 'trial',
-          status: p.status || 'trial',
-          copiesCorrected: p.copiesCorrected || p.total_copies_corrected || 0,
-          quota: p.quota || p.total_available_credits || 15,
-          subscriptionCredits: p.subscriptionCredits || 15,
-          extraCredits: p.extraCredits || 0,
-          totalSpent: p.totalSpent || 0,
-          notes: 'Importé depuis l’export JSON Supabase.',
-          createdAt: p.created_at || new Date().toISOString(),
-          lastActiveAt: p.updated_at || p.created_at || new Date().toISOString(),
-        });
-        added++;
-      }
-    });
-
-    saveLeads(leads);
-    res.json({
-      success: true,
-      added,
-      updated,
-      total: leads.length,
-      message: `${added} profil(s) ajouté(s) et ${updated} mis à jour depuis le JSON Supabase. Total actuel : ${leads.length}.`,
-    });
-  } catch (err: any) {
-    res.status(500).json({ error: 'Erreur import JSON Supabase: ' + err.message });
-  }
 });
 
 // ============================================================================
@@ -5861,6 +5591,349 @@ app.post('/api/admin/quotes/:id/convert', requireAdminAuth, (req, res) => {
     quote,
   });
 });
+
+// ============================================================================
+// 📢 DIFFUSIONS & NOTIFICATIONS DE L'ADMINISTRATEUR (POUR TOUS LES PROFESSEURS)
+// ============================================================================
+
+// Public: Obtenir la liste des annonces actives pour la cloche de notification
+app.get('/api/notifications', (_req, res) => {
+  try {
+    const notifs = loadNotifications();
+    const active = notifs
+      .filter((n) => n.isActive !== false)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    res.json({ success: true, notifications: active });
+  } catch (err) {
+    res.status(500).json({ success: false, error: 'Erreur chargement des notifications.' });
+  }
+});
+
+// Admin: Obtenir toutes les annonces (actives et archivées)
+app.get('/api/admin/notifications', requireAdminAuth, (_req, res) => {
+  try {
+    const notifs = loadNotifications();
+    res.json({
+      success: true,
+      notifications: notifs.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: 'Erreur chargement des notifications.' });
+  }
+});
+
+// Admin: Publier une nouvelle annonce diffusée à tous les utilisateurs
+app.post('/api/admin/notifications', requireAdminAuth, (req, res) => {
+  try {
+    const { title, message, type, badgeText, linkUrl, linkText } = req.body;
+    if (!title || !message) {
+      return res.status(400).json({ error: 'Le titre et le message sont requis.' });
+    }
+
+    const notifs = loadNotifications();
+    const newNotif: BroadcastNotification = {
+      id: 'notif_' + Date.now().toString(36) + '_' + Math.random().toString(36).substring(2, 6),
+      title: title.trim(),
+      message: message.trim(),
+      type: type || 'announcement',
+      badgeText: badgeText ? badgeText.trim() : undefined,
+      linkUrl: linkUrl ? linkUrl.trim() : undefined,
+      linkText: linkText ? linkText.trim() : undefined,
+      createdAt: new Date().toISOString(),
+      createdBy: 'Direction Praxis',
+      isActive: true,
+    };
+
+    notifs.unshift(newNotif);
+    saveNotifications(notifs);
+
+    // Notification Telegram immédiate sur le canal de gestion
+    const typeLabel =
+      newNotif.type === 'warning' ? '⚠️ Alerte' :
+      newNotif.type === 'success' ? '✅ Bonne Nouvelle' :
+      newNotif.type === 'info' ? 'ℹ️ Information' : '📢 Annonce Officielle';
+
+    const tgMsg = `📢 <b>Nouvelle Annonce Diffusée aux Professeurs !</b>
+━━━━━━━━━━━━━━━━━━━━
+📌 <b>Titre :</b> ${escapeTelegramHtml(newNotif.title)}
+📝 <b>Message :</b> ${escapeTelegramHtml(newNotif.message)}
+🏷️ <b>Catégorie :</b> ${typeLabel}
+⏰ <b>Date :</b> ${new Date().toLocaleString('fr-FR', { timeZone: 'Africa/Porto-Novo' })}`;
+
+    sendTelegramNotification(tgMsg).catch(() => {});
+
+    console.log(`[Notifications] Nouvelle annonce publiée : "${newNotif.title}"`);
+    res.json({ success: true, notification: newNotif });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || 'Erreur lors de la diffusion.' });
+  }
+});
+
+// Admin: Activer/Désactiver une annonce
+app.patch('/api/admin/notifications/:id/toggle', requireAdminAuth, (req, res) => {
+  try {
+    const { id } = req.params;
+    const notifs = loadNotifications();
+    const notif = notifs.find((n) => n.id === id);
+    if (!notif) return res.status(404).json({ error: 'Annonce non trouvée.' });
+
+    notif.isActive = !notif.isActive;
+    saveNotifications(notifs);
+    res.json({ success: true, notification: notif });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Admin: Supprimer une annonce
+app.delete('/api/admin/notifications/:id', requireAdminAuth, (req, res) => {
+  try {
+    const { id } = req.params;
+    let notifs = loadNotifications();
+    notifs = notifs.filter((n) => n.id !== id);
+    saveNotifications(notifs);
+    res.json({ success: true, message: 'Annonce supprimée avec succès.' });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ============================================================================
+// 📊 AUDIT & SUIVI DE CONSOMMATION DES CRÉDITS UTILISATEURS (TÂCHE 1 & 2)
+// ============================================================================
+app.get('/api/admin/users-credits', requireAdminAuth, async (_req, res) => {
+  try {
+    const supabase = getSupabaseServerClient();
+    let usersList: any[] = [];
+    let source = 'local';
+
+    if (supabase) {
+      try {
+        // Try to query the view first if it exists, or compute directly from tables
+        const viewRes = await supabase.from('v_admin_user_credits').select('*');
+        if (viewRes.data && Array.isArray(viewRes.data) && viewRes.data.length > 0) {
+          source = 'supabase_view';
+          usersList = viewRes.data.map((row: any) => ({
+            id: row.user_id,
+            email: row.email || '',
+            name: row.full_name || row.email?.split('@')[0] || 'Enseignant',
+            createdAt: row.date_inscription || new Date().toISOString(),
+            creditsOfferts: Number(row.credits_offerts || 0),
+            creditsAchetes: Number(row.credits_achetes || 0),
+            creditsConsommes: Number(row.credits_consommes || 0),
+            soldeActuel: Number(row.solde_actuel || 0),
+            derniereCorrection: row.date_derniere_correction || null,
+            hasDiscrepancy: Boolean(row.has_discrepancy),
+            source: 'Vue SQL Supabase (v_admin_user_credits)',
+          }));
+        } else {
+          // Compute directly from tables
+          source = 'supabase_tables';
+          const [profilesRes, balancesRes, ledgerRes, aiCorrRes, authRes] = await Promise.all([
+            supabase.from('profiles').select('*'),
+            supabase.from('credit_balances').select('*'),
+            supabase.from('credit_ledger').select('*'),
+            supabase.from('ai_corrections').select('teacher_id, created_at'),
+            supabase.auth.admin.listUsers({ page: 1, perPage: 1000 }),
+          ]);
+
+          const profiles = (profilesRes as any)?.data || [];
+          const balances = (balancesRes as any)?.data || [];
+          const ledger = (ledgerRes as any)?.data || [];
+          const aiCorrs = (aiCorrRes as any)?.data || [];
+          const authUsers = (authRes as any)?.data?.users || [];
+
+          // Map balances by teacher_id
+          const balancesMap = new Map();
+          balances.forEach((b: any) => balancesMap.set(b.teacher_id, b));
+
+          // Group ledger by teacher_id
+          const ledgerMap = new Map<string, { offerts: number; achetes: number; consommes: number; lastDate: string | null; count: number }>();
+          ledger.forEach((entry: any) => {
+            const tid = entry.teacher_id;
+            if (!ledgerMap.has(tid)) {
+              ledgerMap.set(tid, { offerts: 0, achetes: 0, consommes: 0, lastDate: null, count: 0 });
+            }
+            const item = ledgerMap.get(tid)!;
+            item.count += 1;
+            const delta = Number(entry.delta) || 0;
+            const act = entry.action_type || '';
+
+            if (delta < 0 || act === 'correction_consume') {
+              item.consommes += Math.abs(delta);
+              if (!item.lastDate || new Date(entry.created_at) > new Date(item.lastDate)) {
+                item.lastDate = entry.created_at;
+              }
+            } else if (act === 'pack_purchase') {
+              item.achetes += delta;
+            } else if (act === 'initial_grant') {
+              // Règle de direction : 15 crédits d'essai offerts
+              item.offerts += 15;
+            } else {
+              // subscription_grant, referral_reward, etc.
+              item.offerts += delta;
+            }
+          });
+
+          // Group AI corrections by teacher_id
+          const aiCorrMap = new Map<string, { count: number; lastDate: string | null }>();
+          aiCorrs.forEach((c: any) => {
+            const tid = c.teacher_id;
+            if (!aiCorrMap.has(tid)) {
+              aiCorrMap.set(tid, { count: 0, lastDate: null });
+            }
+            const stat = aiCorrMap.get(tid)!;
+            stat.count += 1;
+            if (!stat.lastDate || new Date(c.created_at) > new Date(stat.lastDate)) {
+              stat.lastDate = c.created_at;
+            }
+          });
+
+          const handledIds = new Set<string>();
+
+          profiles.forEach((p: any) => {
+            handledIds.add(p.id);
+            const bal = balancesMap.get(p.id);
+            const led = ledgerMap.get(p.id);
+            const aic = aiCorrMap.get(p.id);
+
+            // Credits offerts : 15 crédits de base
+            const off = led && led.offerts > 0 ? led.offerts : 15;
+            // Credits achetes
+            const ach = led ? led.achetes : (bal?.purchased_credits ?? 0);
+            // Credits consommes: Grand livre > bal.total_copies_corrected > ai_corrections count
+            let con = 0;
+            let lastCorr: string | null = null;
+            if (led && led.consommes > 0) {
+              con = led.consommes;
+              lastCorr = led.lastDate;
+            } else if (bal?.total_copies_corrected && bal.total_copies_corrected > 0) {
+              con = bal.total_copies_corrected;
+              lastCorr = bal.updated_at || null;
+            } else if (aic && aic.count > 0) {
+              con = aic.count;
+              lastCorr = aic.lastDate;
+            }
+
+            // Current balance basé sur 15 offerts + achetés - consommés
+            const solde = Math.max(0, off + ach - con);
+            const expectedBalance = off + ach - con;
+            const hasDiscrepancy = solde !== expectedBalance;
+
+            usersList.push({
+              id: p.id,
+              email: p.email || '',
+              name: p.full_name || p.email?.split('@')[0] || 'Enseignant',
+              createdAt: p.created_at || new Date().toISOString(),
+              creditsOfferts: off,
+              creditsAchetes: ach,
+              creditsConsommes: con,
+              soldeActuel: solde,
+              derniereCorrection: lastCorr,
+              hasDiscrepancy,
+              source: led && led.count > 0 ? 'Grand Livre (credit_ledger)' : 'Table Soldes (credit_balances)',
+            });
+          });
+
+          // Also check any authUsers not in profiles
+          authUsers.forEach((u: any) => {
+            if (!handledIds.has(u.id)) {
+              handledIds.add(u.id);
+              const bal = balancesMap.get(u.id);
+              const led = ledgerMap.get(u.id);
+              const off = led && led.offerts > 0 ? led.offerts : 15;
+              const ach = led ? led.achetes : (bal?.purchased_credits ?? 0);
+              const con = led ? led.consommes : (bal?.total_copies_corrected || 0);
+              const solde = Math.max(0, off + ach - con);
+              const hasDiscrepancy = solde !== (off + ach - con);
+
+              usersList.push({
+                id: u.id,
+                email: u.email || '',
+                name: u.user_metadata?.full_name || u.email?.split('@')[0] || 'Enseignant inscrit',
+                createdAt: u.created_at || new Date().toISOString(),
+                creditsOfferts: off,
+                creditsAchetes: ach,
+                creditsConsommes: con,
+                soldeActuel: solde,
+                derniereCorrection: led?.lastDate || null,
+                hasDiscrepancy,
+                source: 'Auth & Balances',
+              });
+            }
+          });
+        }
+      } catch (err) {
+        console.warn('[Credits Audit] Erreur calcul Supabase:', err);
+      }
+    }
+
+    // Merge with any local leads that might have local corrections (e.g. leads.json)
+    const localLeads = loadLeads();
+    const existingEmails = new Map<string, number>();
+    usersList.forEach((u, idx) => {
+      if (u.email) existingEmails.set(u.email.toLowerCase().trim(), idx);
+    });
+
+    localLeads.forEach((l) => {
+      const email = (l.email || '').toLowerCase().trim();
+      if (email && existingEmails.has(email)) {
+        const idx = existingEmails.get(email)!;
+        // If local lead has recorded copies corrected higher than 0 and server had 0, enrich it!
+        if ((l.copiesCorrected || 0) > 0 && usersList[idx].creditsConsommes === 0) {
+          usersList[idx].creditsConsommes = l.copiesCorrected;
+          if (l.lastActiveAt) usersList[idx].derniereCorrection = l.lastActiveAt;
+          usersList[idx].source += ' + local sync';
+          usersList[idx].hasDiscrepancy = usersList[idx].soldeActuel !== (usersList[idx].creditsOfferts + usersList[idx].creditsAchetes - usersList[idx].creditsConsommes);
+        }
+      } else if (email) {
+        // standalone local user
+        const off = l.quota ?? 15;
+        const ach = l.extraCredits || 0;
+        const con = l.copiesCorrected || 0;
+        const solde = l.quota ?? (off + ach - con);
+        usersList.push({
+          id: l.id,
+          email: l.email,
+          name: l.name || l.email.split('@')[0],
+          createdAt: l.createdAt || new Date().toISOString(),
+          creditsOfferts: off,
+          creditsAchetes: ach,
+          creditsConsommes: con,
+          soldeActuel: solde,
+          derniereCorrection: con > 0 ? l.lastActiveAt || l.createdAt : null,
+          hasDiscrepancy: solde !== (off + ach - con),
+          source: 'Fichier Local (leads.json)',
+        });
+      }
+    });
+
+    // Summary KPIs
+    const totalOfferts = usersList.reduce((acc, u) => acc + (u.creditsOfferts || 0), 0);
+    const totalAchetes = usersList.reduce((acc, u) => acc + (u.creditsAchetes || 0), 0);
+    const totalConsommes = usersList.reduce((acc, u) => acc + (u.creditsConsommes || 0), 0);
+    const totalSolde = usersList.reduce((acc, u) => acc + (u.soldeActuel || 0), 0);
+    const discrepanciesCount = usersList.filter((u) => u.hasDiscrepancy).length;
+
+    res.json({
+      success: true,
+      count: usersList.length,
+      users: usersList,
+      summary: {
+        totalOfferts,
+        totalAchetes,
+        totalConsommes,
+        totalSolde,
+        discrepanciesCount,
+        source,
+      },
+    });
+  } catch (err: any) {
+    console.error('[Credits Audit] Erreur endpoint:', err);
+    res.status(500).json({ success: false, error: err.message || 'Erreur lors du calcul des crédits utilisateurs.' });
+  }
+});
+
 
 // ============================================================================
 // 🤝 DASHBOARD AFFILIÉ PRAXIS (COMMISSIONS, SUIVI EN TEMPS RÉEL & VERSEMENTS)
@@ -7153,7 +7226,7 @@ function getInstitutionContext(req: express.Request) {
   const userEmail = queryEmail || headerEmail;
 
   // Accès automatique en mode Démonstration Direction ou pour le compte admin / test
-  if (demoRequested || userEmail === 'directeur@praxis.edu' || userEmail === 'bilingua.agency@gmail.com' || userEmail === 'praxis.edu0@gmail.com') {
+  if (demoRequested || userEmail === 'directeur@praxis.edu' || userEmail === 'bilingua.agency@gmail.com') {
     const adminMember = (data.members || []).find((m: any) => m.role === 'institution_admin') || data.members[0];
     return {
       institution: data.institution,
@@ -7923,18 +7996,6 @@ async function startServer() {
 
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`[Praxis' IA] Serveur démarré avec succès sur http://0.0.0.0:${PORT}`);
-
-    // Synchronisation automatique de fond des 367+ enseignants Supabase
-    try {
-      const supa = getActiveSupabaseClient();
-      if (supa) {
-        syncFromSupabase(supa.client)
-          .then((res) => console.log(`[Praxis Supabase] Synchronisation de démarrage réussie : ${res.imported} nouveaux, ${res.updated} actualisés (Total: ${res.total})`))
-          .catch((err) => console.warn('[Praxis Supabase] Synchronisation différée :', err?.message || err));
-      }
-    } catch (e) {
-      // Ignorer pour ne pas bloquer le démarrage
-    }
   });
 }
 

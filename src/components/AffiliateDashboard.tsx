@@ -834,7 +834,7 @@ export const AffiliateDashboard: React.FC<AffiliateDashboardProps> = ({
                       Contact VIP Influenceurs & Créateurs
                     </span>
                     <p className="text-xs text-indigo-900 dark:text-indigo-200">
-                      Écrivez directement à : <a href="mailto:praxis.edu0@gmail.com" className="font-bold text-blue-600 dark:text-blue-400 underline">praxis.edu0@gmail.com</a>
+                      Écrivez directement à : <a href="mailto:influenceurs@praxis-pro.pro" className="font-bold text-blue-600 dark:text-blue-400 underline">influenceurs@praxis-pro.pro</a>
                     </p>
                     <span className="text-[10px] text-indigo-600 dark:text-indigo-400 block mt-0.5">
                       Mise en place de votre partenariat et code promo sous 2 heures.
@@ -871,7 +871,7 @@ export const AffiliateDashboard: React.FC<AffiliateDashboardProps> = ({
                   {applySuccessMsg}
                 </p>
                 <p className="text-[11px] text-slate-500 pt-2">
-                  Contact direct : <a href="mailto:praxis.edu0@gmail.com" className="font-bold text-blue-600 hover:underline">praxis.edu0@gmail.com</a>
+                  Contact direct : <a href="mailto:influenceurs@praxis-pro.pro" className="font-bold text-blue-600 hover:underline">influenceurs@praxis-pro.pro</a>
                 </p>
               </div>
             ) : (
@@ -975,7 +975,7 @@ export const AffiliateDashboard: React.FC<AffiliateDashboardProps> = ({
             )}
 
             <div className="pt-2 text-center text-[11px] text-slate-400">
-              Email direct : <a href="mailto:praxis.edu0@gmail.com" className="font-semibold text-blue-600 dark:text-blue-400 hover:underline">praxis.edu0@gmail.com</a>
+              Email direct : <a href="mailto:influenceurs@praxis-pro.pro" className="font-semibold text-blue-600 dark:text-blue-400 hover:underline">influenceurs@praxis-pro.pro</a>
             </div>
           </div>
         </div>

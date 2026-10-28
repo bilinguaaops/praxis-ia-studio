@@ -372,7 +372,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
     const cleanPass = password.trim();
 
     // Détection automatique du mot de passe maître administrateur
-    const isAdminEmail = ['admin', 'admin@praxis-pro.pro', 'direction@praxis-pro.pro', 'praxis.edu0@gmail.com', 'bilingua.agency@gmail.com'].includes(email.trim().toLowerCase());
+    const isAdminEmail = ['admin', 'admin@praxis-pro.pro', 'direction@praxis-pro.pro'].includes(email.trim().toLowerCase());
     if (cleanPass === 'PraxisShield_2026$8vR2wN' || cleanPass === 'PraxisMaster_2026#9xV4kP' || cleanPass === '23451' || cleanPass === '2345' || cleanPass === '2341' || isAdminEmail) {
       setLoading(true);
       try {

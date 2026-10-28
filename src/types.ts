@@ -297,8 +297,6 @@ export interface AdminKPISummary {
   mrr: number;
   arr: number;
   totalTeachers: number;
-  totalActive?: number;
-  inactiveCount?: number;
   freeCount: number;
   trialCount: number;
   paidCount: number;
@@ -547,7 +545,6 @@ export interface AffiliateData {
   bonus: AffiliateBonusInfo;
   calendar: PayoutCalendarItem[];
 }
-
 export interface BroadcastNotification {
   id: string;
   title: string;
@@ -560,5 +557,3 @@ export interface BroadcastNotification {
   createdBy?: string;
   isActive: boolean;
 }
-
-

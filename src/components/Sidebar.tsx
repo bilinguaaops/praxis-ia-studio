@@ -72,7 +72,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const hasPaidInstitutionPlan = Boolean(
     currentLead?.plan === 'institution' ||
     currentLead?.role === 'institution_admin' ||
-    (currentLead?.email && ['directeur@praxis.edu', 'praxis.edu0@gmail.com', 'bilingua.agency@gmail.com'].includes(currentLead.email.toLowerCase()))
+    (currentLead?.email && ['directeur@praxis.edu'].includes(currentLead.email.toLowerCase()))
   );
 
   const mainSectionItems: NavItem[] = [
