@@ -25,6 +25,8 @@ import {
   MessageCircle,
 } from 'lucide-react';
 
+import { VideoTutorialSection } from './VideoTutorialSection';
+
 interface FaqViewProps {
   onStartCorrection: () => void;
   onOpenContact?: () => void;
@@ -359,6 +361,12 @@ export const FaqView: React.FC<FaqViewProps> = ({ onStartCorrection, onOpenConta
           </div>
         </div>
       </div>
+
+      {/* Video Tutorial Walkthrough Section */}
+      <VideoTutorialSection
+        onStartCorrection={onStartCorrection}
+        onOpenContact={onOpenContact}
+      />
 
       {/* Category Filter Chips */}
       <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
