@@ -1,5 +1,17 @@
 [
   {
+    "id": "notif_mvts6kq9_4nts",
+    "title": "Besoin d'aide ou un problème ? Contactez le support Praxis 📧",
+    "message": "Chers enseignants, en cas de question, de difficulté lors d'une correction ou de problème technique, notre équipe est à votre disposition. Écrivez-nous directement à notre nouvelle adresse officielle : praxis.edu0@gmail.com (ou via WhatsApp au +225 0103890314). Nous nous engageons à vous répondre dans les plus brefs délais.",
+    "type": "announcement",
+    "badgeText": "Support Officiel",
+    "linkUrl": "mailto:praxis.edu0@gmail.com?subject=Assistance%20Praxis%20Pro",
+    "linkText": "Écrire au support",
+    "createdAt": "2026-10-29T16:51:57.681Z",
+    "createdBy": "Direction Praxis",
+    "isActive": true
+  },
+  {
     "id": "notif_mvrwvrb2_s7gs",
     "title": "Annonce Test Professeurs",
     "message": "Bienvenue ! Vos 15 crédits de correction sont disponibles.",
