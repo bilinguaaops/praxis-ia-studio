@@ -153,10 +153,23 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  // Effective authenticated lead : Supabase PostgreSQL est la SOURCE DE VÉRITÉ UNIQUE
-  // Aucun calcul local dérivé du localStorage ne doit altérer les soldes réels de credit_balances.
+  // Effective authenticated lead : Supabase PostgreSQL est la SOURCE DE VÉRITÉ UNIQUE.
+  // Permet les mises à jour optimistes immédiates lors d'une correction pour éviter tout effet de blocage visuel.
   const currentLead: LeadData | null = useMemo(() => {
     if (supabaseLead) {
+      if (localLead && (!localLead.email || localLead.email.toLowerCase() === supabaseLead.email.toLowerCase())) {
+        const effectiveCopies = Math.max(supabaseLead.copiesCorrected || 0, localLead.copiesCorrected || 0);
+        const effectiveCredits = typeof localLead.subscriptionCredits === 'number'
+          ? Math.min(supabaseLead.subscriptionCredits ?? 15, localLead.subscriptionCredits)
+          : supabaseLead.subscriptionCredits;
+        return {
+          ...supabaseLead,
+          copiesCorrected: effectiveCopies,
+          subscriptionCredits: effectiveCredits,
+          extraCredits: localLead.extraCredits ?? supabaseLead.extraCredits,
+          quota: Math.max(supabaseLead.quota || 15, effectiveCopies + (effectiveCredits || 0) + (supabaseLead.extraCredits || 0)),
+        };
+      }
       return supabaseLead;
     }
     return localLead;
@@ -1204,13 +1217,22 @@ export default function App() {
                       config={config}
                       submissions={submissions}
                       onSubmissionsChange={setSubmissions}
-                      onFinish={() => goToStep(4)}
-                      onViewDashboard={() => goToStep(4)}
+                      onFinish={() => {
+                        handleSaveCurrentEvaluation(activeTeacherNotes, true);
+                        goToStep(4);
+                      }}
+                      onViewDashboard={() => {
+                        handleSaveCurrentEvaluation(activeTeacherNotes, false);
+                        goToStep(4);
+                      }}
                       onBack={handleBack}
                       currentLead={currentLead}
                       onRequireRegistration={() => setIsLeadGateOpen(true)}
                       onOpenPaywall={() => handleOpenPaywall('quarterly')}
                       onLeadChange={(updatedLead) => {
+                        if (recordCopiesCorrected && updatedLead.copiesCorrected) {
+                          recordCopiesCorrected(updatedLead.copiesCorrected);
+                        }
                         refreshProfile();
                         setLocalLead((prev) => ({
                           ...(prev || {}),

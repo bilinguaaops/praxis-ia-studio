@@ -479,11 +479,15 @@ export const Step3Progress: React.FC<Step3ProgressProps> = ({
 
           <div className="flex flex-wrap items-center gap-2.5">
             <div className="px-3 py-1.5 rounded-xl bg-blue-50/80 border border-blue-200 text-blue-900 flex items-center gap-1.5">
-              <span className="text-[10px] uppercase font-bold text-blue-600">Abonnement :</span>
+              <span className="text-[10px] uppercase font-bold text-blue-600">
+                {!activeLead.plan || activeLead.plan === 'trial' || activeLead.plan === 'free' ? 'Crédits offerts :' : 'Abonnement :'}
+              </span>
               <strong className="font-mono text-sm font-black text-blue-700">
                 {activeLead.subscriptionCredits ?? 0}
               </strong>
-              <span className="text-[10px] text-blue-500 font-semibold">/ 1 500 max</span>
+              <span className="text-[10px] text-blue-500 font-semibold">
+                {!activeLead.plan || activeLead.plan === 'trial' || activeLead.plan === 'free' ? '/ 15 offerts' : '/ 1 500 max'}
+              </span>
             </div>
 
             <div className="px-3 py-1.5 rounded-xl bg-amber-50/80 border border-amber-200 text-amber-900 flex items-center gap-1.5">

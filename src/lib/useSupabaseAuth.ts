@@ -206,12 +206,36 @@ export function useSupabaseAuth() {
     };
   }, [user?.id, fetchUserData]);
 
-  // Le client ne doit jamais faire d'UPDATE direct sur credit_balances (sécurité RLS).
-  // recordCopiesCorrected déclenche un rafraîchissement depuis la base après une correction.
-  const recordCopiesCorrected = useCallback(async (_newCount: number) => {
+  // Le client ne fait pas d'UPDATE direct SQL, mais applique une mise à jour optimiste
+  // immédiate sur le state local puis confirme avec la base pour une réactivité parfaite sans latence.
+  const recordCopiesCorrected = useCallback(async (newCount: number) => {
     if (!user?.id || !isSupabaseConfigured) return;
-    await refreshProfile();
-  }, [user?.id, refreshProfile]);
+    setBalance((prev) => {
+      if (!prev) return prev;
+      const copiesDiff = Math.max(1, newCount - (prev.total_copies_corrected || 0));
+      let newFree = prev.free_credits ?? 0;
+      let newSub = prev.subscription_credits ?? 0;
+      let newPurchased = prev.purchased_credits ?? 0;
+
+      if (newSub > 0) {
+        newSub = Math.max(0, newSub - copiesDiff);
+      } else if (newFree > 0) {
+        newFree = Math.max(0, newFree - copiesDiff);
+      } else if (newPurchased > 0) {
+        newPurchased = Math.max(0, newPurchased - copiesDiff);
+      }
+
+      return {
+        ...prev,
+        free_credits: newFree,
+        subscription_credits: newSub,
+        purchased_credits: newPurchased,
+        total_copies_corrected: Math.max(prev.total_copies_corrected || 0, newCount),
+        total_available_credits: Math.max(0, newFree + newSub + newPurchased),
+      };
+    });
+    await fetchUserData(user.id);
+  }, [user?.id, fetchUserData]);
 
   // Mapper le profil et le solde vers le type LeadData utilisé par Praxis
   // SOURCE DE VÉRITÉ UNIQUE : Tout provient directement de credit_balances

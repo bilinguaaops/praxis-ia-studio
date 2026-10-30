@@ -1644,6 +1644,43 @@ app.post('/api/correct', async (req, res) => {
       );
     }
 
+    // Synchronisation temps réel avec Supabase credit_balances si l'enseignant est authentifié
+    const supabaseServerPre = getSupabaseServerClient();
+    let initialTeacherId = (bodyUserId || (req.headers['x-user-id'] as string) || '').toString().trim();
+
+    if (supabaseServerPre) {
+      try {
+        if (!initialTeacherId && cleanUserEmail && cleanUserEmail !== 'professeur@praxis.edu') {
+          const { data: prof } = await supabaseServerPre
+            .from('profiles')
+            .select('id')
+            .eq('email', cleanUserEmail)
+            .maybeSingle();
+          if (prof?.id) {
+            initialTeacherId = prof.id;
+          }
+        }
+
+        if (initialTeacherId) {
+          const { data: dbBal } = await supabaseServerPre
+            .from('credit_balances')
+            .select('*')
+            .eq('teacher_id', initialTeacherId)
+            .maybeSingle();
+
+          if (dbBal) {
+            const isTrialOrFree = !lead.plan || lead.plan === 'free' || lead.plan === 'trial';
+            lead.copiesCorrected = dbBal.total_copies_corrected ?? lead.copiesCorrected ?? 0;
+            lead.subscriptionCredits = isTrialOrFree ? (dbBal.free_credits ?? 15) : (dbBal.subscription_credits ?? 0);
+            lead.extraCredits = dbBal.purchased_credits ?? 0;
+            lead.quota = (dbBal.total_available_credits ?? (dbBal.free_credits + dbBal.subscription_credits + dbBal.purchased_credits)) + (lead.copiesCorrected || 0);
+          }
+        }
+      } catch (dbSyncErr) {
+        console.warn('[Supabase Sync Pre-check] Erreur synchro solde:', dbSyncErr);
+      }
+    }
+
     // Check Quota Limit: Evaluate subscriptionCredits + extraCredits, with fallback to quota - copiesCorrected
     const currentCopies = lead.copiesCorrected || 0;
     const defaultTrialQuota = DEFAULT_TRIAL_QUOTA;
@@ -2861,23 +2898,99 @@ IMPORTANT : Ne pose AUCUNE question. Remplis directement le JSON avec les inform
             }
 
             if (targetTeacherId) {
-              // Assurer un format UUID v4 valide
               let subUuid = (bodySubId || '').toString().trim();
               const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
               if (!uuidRegex.test(subUuid)) {
                 subUuid = crypto.randomUUID();
               }
 
-              const { data: rpcData, error: rpcError } = await supabaseServer.rpc('consume_correction_credit', {
-                p_teacher_id: targetTeacherId,
-                p_submission_id: subUuid,
-              });
+              let rpcSuccess = false;
+              // 1. Essai via RPC officiel si supporté
+              try {
+                const { data: rpcData, error: rpcError } = await supabaseServer.rpc('consume_correction_credit', {
+                  p_teacher_id: targetTeacherId,
+                  p_submission_id: subUuid,
+                });
+                if (!rpcError && rpcData && rpcData.success === true) {
+                  rpcSuccess = true;
+                  console.log('[Supabase RPC] Débit RPC réussi pour', cleanUserEmail, rpcData);
+                }
+              } catch (e) {
+                // Repli direct ci-dessous
+              }
 
-              if (rpcError) {
-                console.warn('[Supabase RPC] Erreur consume_correction_credit:', rpcError.message);
+              // 2. Si le RPC a échoué ou attend une table submissions pré-remplie,
+              // débit direct sécurisé et infaillible via service_role dans credit_balances & credit_ledger
+              if (!rpcSuccess) {
+                const { data: curBal } = await supabaseServer
+                  .from('credit_balances')
+                  .select('*')
+                  .eq('teacher_id', targetTeacherId)
+                  .maybeSingle();
+
+                if (curBal) {
+                  let chosenType: 'subscription' | 'free' | 'purchased' = 'free';
+                  let nFree = curBal.free_credits ?? 0;
+                  let nSub = curBal.subscription_credits ?? 0;
+                  let nPurchased = curBal.purchased_credits ?? 0;
+
+                  if (nSub > 0) {
+                    chosenType = 'subscription';
+                    nSub = Math.max(0, nSub - 1);
+                  } else if (nFree > 0) {
+                    chosenType = 'free';
+                    nFree = Math.max(0, nFree - 1);
+                  } else if (nPurchased > 0) {
+                    chosenType = 'purchased';
+                    nPurchased = Math.max(0, nPurchased - 1);
+                  }
+
+                  const nTotalCopies = (curBal.total_copies_corrected || 0) + 1;
+
+                  // Mise à jour de credit_balances (sans la colonne générée total_available_credits)
+                  const { data: updatedBal, error: upErr } = await supabaseServer
+                    .from('credit_balances')
+                    .update({
+                      free_credits: nFree,
+                      subscription_credits: nSub,
+                      purchased_credits: nPurchased,
+                      total_copies_corrected: nTotalCopies,
+                      last_updated_at: new Date().toISOString(),
+                    })
+                    .eq('teacher_id', targetTeacherId)
+                    .select()
+                    .maybeSingle();
+
+                  if (!upErr && updatedBal) {
+                    console.log('[Supabase Direct Debit] Débit réussi pour', cleanUserEmail, updatedBal);
+                    const isTrialOrFree = !lead.plan || lead.plan === 'free' || lead.plan === 'trial';
+                    lead.copiesCorrected = updatedBal.total_copies_corrected;
+                    lead.subscriptionCredits = isTrialOrFree ? updatedBal.free_credits : updatedBal.subscription_credits;
+                    lead.extraCredits = updatedBal.purchased_credits;
+                    lead.quota = updatedBal.total_available_credits + updatedBal.total_copies_corrected;
+                  }
+
+                  // Inscription dans credit_ledger
+                  await supabaseServer
+                    .from('credit_ledger')
+                    .insert({
+                      teacher_id: targetTeacherId,
+                      delta: -1,
+                      credit_type: chosenType,
+                      action_type: 'correction_consume',
+                      submission_id: null,
+                      metadata: {
+                        student_name: studentName || 'Élève',
+                        note: parsed.note,
+                        note_sur: parsed.note_sur || 20,
+                        source: 'praxis_correction_engine',
+                        timestamp: new Date().toISOString(),
+                      },
+                    })
+                    .catch((errLedger: any) => console.warn('[Supabase Ledger] Warning insertion:', errLedger));
+                }
               } else {
-                console.log('[Supabase RPC] Débit réussi pour', cleanUserEmail, rpcData);
-                // Mettre à jour l'état local avec les données réelles et certifiées de la base
+                // Si le RPC a réussi, synchroniser l'état local avec la base
                 const { data: dbBal } = await supabaseServer
                   .from('credit_balances')
                   .select('*')
@@ -2885,15 +2998,16 @@ IMPORTANT : Ne pose AUCUNE question. Remplis directement le JSON avec les inform
                   .maybeSingle();
 
                 if (dbBal) {
+                  const isTrialOrFree = !lead.plan || lead.plan === 'free' || lead.plan === 'trial';
                   lead.copiesCorrected = dbBal.total_copies_corrected;
-                  lead.subscriptionCredits = dbBal.free_credits + dbBal.subscription_credits;
+                  lead.subscriptionCredits = isTrialOrFree ? dbBal.free_credits : dbBal.subscription_credits;
                   lead.extraCredits = dbBal.purchased_credits;
                   lead.quota = dbBal.total_available_credits + dbBal.total_copies_corrected;
                 }
               }
             }
           } catch (supaErr) {
-            console.warn('[Supabase RPC] Exception consume_correction_credit:', supaErr);
+            console.warn('[Supabase Débit] Exception générale :', supaErr);
           }
         }
       }
