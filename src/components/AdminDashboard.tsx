@@ -47,6 +47,7 @@ import {
   Bell,
   Radio,
   Coins,
+  Video,
 } from 'lucide-react';
 import {
   Chart,
@@ -67,6 +68,7 @@ import { AdminAffiliatesView } from './AdminAffiliatesView';
 import { AdminNotificationsView } from './AdminNotificationsView';
 import { AdminUserCreditsView } from './AdminUserCreditsView';
 import { AdminNotificationBar } from './AdminNotificationBar';
+import { AdminTutorialsView } from './AdminTutorialsView';
 
 // Register Chart.js components
 Chart.register(
@@ -87,7 +89,7 @@ interface AdminDashboardProps {
   onBackToApp: () => void;
 }
 
-type TabKey = 'overview' | 'crm' | 'credits' | 'transactions' | 'automations' | 'quotes' | 'affiliates' | 'notifications';
+type TabKey = 'overview' | 'crm' | 'credits' | 'transactions' | 'automations' | 'quotes' | 'affiliates' | 'notifications' | 'tutorials';
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToApp }) => {
   // Authentication State
@@ -725,6 +727,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToApp }) =
     link.click();
     document.body.removeChild(link);
     showToast(`Export de ${filteredTeachers.length} enseignants téléchargé au format CSV Excel.`, 'success');
+  };
+
+  // Copy All Filtered Teacher Emails for BCC mailing
+  const handleCopyAllEmails = () => {
+    const emails = filteredTeachers
+      .map((t) => (t.email || '').trim())
+      .filter((e) => e && e.includes('@'));
+    const uniqueEmails = Array.from(new Set(emails));
+    if (uniqueEmails.length === 0) {
+      showToast('Aucun email valide trouvé dans la sélection.', 'error');
+      return;
+    }
+    const formatted = uniqueEmails.join(', ');
+    navigator.clipboard.writeText(formatted);
+    showToast(`✅ ${uniqueEmails.length} adresses email copiées ! Prêt à coller dans le champ Cci de Gmail ou Outlook.`, 'success');
   };
 
   // Add New Teacher
@@ -1468,6 +1485,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToApp }) =
                 <Bell className="w-3.5 h-3.5" />
                 <span>Diffusions & Cloche</span>
               </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab('tutorials')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
+                  activeTab === 'tutorials'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                }`}
+              >
+                <Video className="w-3.5 h-3.5" />
+                <span>Vidéos Tutoriels</span>
+              </button>
             </nav>
 
             {/* Right: Actions, Sync, Logout */}
@@ -2051,10 +2081,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToApp }) =
                   type="button"
                   onClick={handleExportCSV}
                   className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold rounded-xl border border-slate-700 transition-colors cursor-pointer"
-                  title="Exporter la sélection au format CSV UTF-8 pour Excel"
+                  title="Exporter la sélection au format CSV UTF-8 pour Excel ou votre autorépondeur"
                 >
                   <Download className="w-3.5 h-3.5" />
                   <span className="hidden sm:inline">Export CSV</span>
+                </button>
+
+                {/* Copy All Emails (Bcc) Button */}
+                <button
+                  type="button"
+                  onClick={handleCopyAllEmails}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-indigo-950/80 hover:bg-indigo-900/80 text-indigo-300 text-xs font-semibold rounded-xl border border-indigo-700/60 transition-colors cursor-pointer"
+                  title="Copier toutes les adresses email au format 'a@b.com, c@d.com' pour envoi en Cci"
+                >
+                  <Mail className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Copier emails ({filteredTeachers.length})</span>
                 </button>
 
                 {/* Add Teacher Button */}
@@ -3188,6 +3229,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToApp }) =
         {activeTab === 'credits' && (
           <div className="animate-fade-in">
             <AdminUserCreditsView
+              adminToken={getAdminToken()}
+              onNotify={(text, type) => showToast(text, type)}
+            />
+          </div>
+        )}
+
+        {/* ========================================================= */}
+        {/* TAB 9: GESTION DES VIDÉOS TUTORIELS (FAQ & AIDE ENSEIGNANTS) */}
+        {/* ========================================================= */}
+        {activeTab === 'tutorials' && (
+          <div className="animate-fade-in">
+            <AdminTutorialsView
               adminToken={getAdminToken()}
               onNotify={(text, type) => showToast(text, type)}
             />

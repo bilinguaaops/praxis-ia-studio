@@ -832,6 +832,68 @@ function saveNotifications(notifications: BroadcastNotification[]) {
   }
 }
 
+// --- Video Tutorials Storage helpers ---
+const TUTORIALS_FILE = path.join(process.cwd(), 'tutorials.json');
+
+export interface VideoTutorial {
+  id: string;
+  title: string;
+  description: string;
+  videoUrl: string;
+  videoType: 'youtube' | 'cloudinary' | 'loom' | 'direct';
+  duration?: string;
+  isFeatured?: boolean;
+  category?: string;
+  chapters?: Array<{ id: number; time: string; title: string; desc?: string }>;
+  updatedAt?: string;
+}
+
+function normalizeVideoUrl(rawUrl: string): { embedUrl: string; type: 'youtube' | 'cloudinary' | 'loom' | 'direct' } {
+  const clean = (rawUrl || '').trim();
+  if (!clean) return { embedUrl: '', type: 'direct' };
+
+  if (clean.includes('youtube.com/watch?v=')) {
+    const videoId = clean.split('v=')[1]?.split('&')[0];
+    return { embedUrl: `https://www.youtube.com/embed/${videoId}?autoplay=1`, type: 'youtube' };
+  }
+  if (clean.includes('youtu.be/')) {
+    const videoId = clean.split('youtu.be/')[1]?.split('?')[0];
+    return { embedUrl: `https://www.youtube.com/embed/${videoId}?autoplay=1`, type: 'youtube' };
+  }
+  if (clean.includes('youtube.com/shorts/')) {
+    const videoId = clean.split('shorts/')[1]?.split('?')[0];
+    return { embedUrl: `https://www.youtube.com/embed/${videoId}?autoplay=1`, type: 'youtube' };
+  }
+  if (clean.includes('loom.com/share/')) {
+    return { embedUrl: clean.replace('loom.com/share/', 'loom.com/embed/'), type: 'loom' };
+  }
+  if (clean.includes('cloudinary.com')) {
+    return { embedUrl: clean, type: 'cloudinary' };
+  }
+  return { embedUrl: clean, type: 'direct' };
+}
+
+function loadTutorials(): VideoTutorial[] {
+  try {
+    if (fs.existsSync(TUTORIALS_FILE)) {
+      const data = fs.readFileSync(TUTORIALS_FILE, 'utf-8');
+      const parsed = JSON.parse(data);
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch (err) {
+    console.warn('[Tutorials] Erreur lecture tutorials.json :', err);
+  }
+  return [];
+}
+
+function saveTutorials(tutorials: VideoTutorial[]) {
+  try {
+    atomicWriteJsonSync(TUTORIALS_FILE, tutorials);
+  } catch (err) {
+    console.error('[Tutorials] Erreur enregistrement tutorials.json :', err);
+  }
+}
+
 // --- Affiliates Storage helpers ---
 const AFFILIATES_FILE = path.join(process.cwd(), 'affiliates.json');
 
@@ -5945,6 +6007,90 @@ app.delete('/api/admin/notifications/:id', requireAdminAuth, (req, res) => {
     notifs = notifs.filter((n) => n.id !== id);
     saveNotifications(notifs);
     res.json({ success: true, message: 'Annonce supprimée avec succès.' });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ============================================================================
+// 🎬 VIDÉOS TUTORIELS & PRISE EN MAIN (GESTION ADMIN & AFFICHAGE PROFESSEURS)
+// ============================================================================
+
+// Public: Obtenir la liste des vidéos tutoriels
+app.get('/api/tutorials', (_req, res) => {
+  try {
+    const tutorials = loadTutorials();
+    res.json({ success: true, tutorials });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Admin: Obtenir tous les tutoriels
+app.get('/api/admin/tutorials', requireAdminAuth, (_req, res) => {
+  try {
+    const tutorials = loadTutorials();
+    res.json({ success: true, tutorials });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Admin: Ajouter ou mettre à jour un tutoriel
+app.post('/api/admin/tutorials', requireAdminAuth, (req, res) => {
+  try {
+    const { id, title, description, videoUrl, duration, category, isFeatured, chapters } = req.body;
+    if (!title || !videoUrl) {
+      return res.status(400).json({ error: 'Le titre et l\'URL de la vidéo sont obligatoires.' });
+    }
+
+    const { embedUrl, type: detectedType } = normalizeVideoUrl(videoUrl);
+    let tutorials = loadTutorials();
+
+    const existingIndex = id ? tutorials.findIndex((t) => t.id === id) : -1;
+
+    const tutorialObj: VideoTutorial = {
+      id: id || `tut_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 6)}`,
+      title: String(title).trim(),
+      description: String(description || '').trim(),
+      videoUrl: embedUrl,
+      videoType: detectedType,
+      duration: duration || '03:00',
+      category: category || 'Prise en main',
+      isFeatured: isFeatured !== undefined ? Boolean(isFeatured) : true,
+      chapters: Array.isArray(chapters) ? chapters : [],
+      updatedAt: new Date().toISOString(),
+    };
+
+    if (tutorialObj.isFeatured) {
+      // Si ce tutoriel est mis en avant, désactiver le featured sur les autres
+      tutorials.forEach((t) => {
+        if (t.id !== tutorialObj.id) t.isFeatured = false;
+      });
+    }
+
+    if (existingIndex >= 0) {
+      tutorials[existingIndex] = tutorialObj;
+    } else {
+      tutorials.unshift(tutorialObj);
+    }
+
+    saveTutorials(tutorials);
+    console.log(`[Tutorials] Vidéo tutoriel enregistrée : "${tutorialObj.title}"`);
+    res.json({ success: true, tutorial: tutorialObj, tutorials });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Admin: Supprimer un tutoriel
+app.delete('/api/admin/tutorials/:id', requireAdminAuth, (req, res) => {
+  try {
+    const { id } = req.params;
+    let tutorials = loadTutorials();
+    tutorials = tutorials.filter((t) => t.id !== id);
+    saveTutorials(tutorials);
+    res.json({ success: true, message: 'Tutoriel supprimé avec succès.' });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }

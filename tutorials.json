@@ -1,0 +1,36 @@
+[
+  {
+    "id": "tut_main_guide",
+    "title": "Démonstration : Fonctionnement de Praxis Pas à Pas",
+    "description": "Vidéo officielle montrant comment utiliser Praxis pour corriger et évaluer rapidement vos copies d'élèves.",
+    "videoUrl": "https://www.youtube.com/embed/ZXaaJzhgJCw?autoplay=1",
+    "videoType": "youtube",
+    "duration": "01:00",
+    "isFeatured": true,
+    "category": "Prise en main",
+    "chapters": [
+      { "id": 0, "time": "00:00", "title": "Présentation & Connexion", "desc": "Découvrez l'interface, votre solde de crédits offerts et l'accès enseignant." },
+      { "id": 1, "time": "00:45", "title": "Étape 1 · Sujet & Barème", "desc": "Saisissez l'énoncé ou laissez l'IA générer une grille critériée sur 20." },
+      { "id": 2, "time": "01:30", "title": "Étape 2 · Numérisation Smartphone", "desc": "Photographiez ou scannez les copies manuscrites avec CamScanner ou l'appareil photo." },
+      { "id": 3, "time": "02:15", "title": "Étape 3 · Analyse & Double Moteur IA", "desc": "Vision haute définition, lecture de l'écriture manuscrite et citations exactes de l'élève." },
+      { "id": 4, "time": "03:00", "title": "Étape 4 · Révision & Export Pronote", "desc": "Ajustez les notes à votre convenance en 1 clic et téléchargez les fiches ou le CSV notes." }
+    ],
+    "updatedAt": "2026-10-30T13:30:00.000Z"
+  },
+  {
+    "id": "tut_scan_mobile",
+    "title": "Guide Numérisation : Scanner les devoirs avec votre smartphone",
+    "description": "Conseils pratiques pour utiliser CamScanner, Adobe Scan ou l'appareil photo afin d'obtenir un contraste net et un cadrage optimal des copies.",
+    "videoUrl": "https://www.youtube.com/embed/dQw4w9WgXcQ?autoplay=1",
+    "videoType": "youtube",
+    "duration": "02:10",
+    "isFeatured": false,
+    "category": "Numérisation",
+    "chapters": [
+      { "id": 0, "time": "00:00", "title": "Choisir son application de scan", "desc": "CamScanner, Adobe Scan ou application Notes native." },
+      { "id": 1, "time": "00:50", "title": "Éclairage et angles", "desc": "Éviter les ombres portées et bien cadrer les 4 coins de la copie." },
+      { "id": 2, "time": "01:30", "title": "Export en PDF de classe", "desc": "Regrouper toutes les copies en un seul fichier PDF ou un par élève." }
+    ],
+    "updatedAt": "2026-10-30T13:30:00.000Z"
+  }
+]

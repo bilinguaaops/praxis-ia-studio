@@ -23,7 +23,10 @@ import {
   Phone,
   Mail,
   MessageCircle,
+  Film,
 } from 'lucide-react';
+
+import { VideoTutorialSection } from './VideoTutorialSection';
 
 interface FaqViewProps {
   onStartCorrection: () => void;
@@ -360,8 +363,22 @@ export const FaqView: React.FC<FaqViewProps> = ({ onStartCorrection, onOpenConta
         </div>
       </div>
 
+      {/* Dedicated Video Tutorial Section */}
+      <VideoTutorialSection
+        onStartCorrection={onStartCorrection}
+        onOpenContact={onOpenContact}
+      />
+
       {/* Category Filter Chips */}
       <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
+        <a
+          href="#tutoriels-video"
+          className="px-3.5 py-1.5 rounded-xl text-xs font-extrabold transition-all shrink-0 cursor-pointer flex items-center gap-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-xs hover:opacity-95"
+        >
+          <Film className="w-3.5 h-3.5" />
+          <span>Tutoriels Vidéo (2)</span>
+        </a>
+
         <button
           type="button"
           onClick={() => setSelectedCategory('all')}
