@@ -415,98 +415,118 @@ export const Step4Dashboard: React.FC<Step4DashboardProps> = ({
   };
 
   return (
-    <div className="max-w-7xl mx-auto space-y-6 pb-16">
+    <div className="max-w-7xl mx-auto space-y-6 pb-28 sm:pb-16">
       {/* Top Banner with Quick Actions */}
-      <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-2xs">
-        <div>
-          <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
-            Étape 4 sur 4 · Tableau de bord & Notes
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 sm:p-6 shadow-xs space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800/80 pb-4">
+          <div>
+            <div className="text-[11px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400 mb-1 flex items-center gap-1.5">
+              <span>Étape 4 sur 4</span>
+              <span className="opacity-40">•</span>
+              <span>Tableau de bord & Notes</span>
+            </div>
+            <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight">
+              {config.title}
+            </h1>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+              {config.discipline} · {config.level} · <strong className="text-slate-700 dark:text-slate-200">{gradedList.length}</strong> sur {submissions.length} copies évaluées
+            </p>
           </div>
-          <h1 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white tracking-tight">
-            {config.title}
-          </h1>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-            {config.discipline} · {config.level} · {gradedList.length} sur {submissions.length} copies évaluées
-          </p>
+
+          {/* Statut validation badge */}
+          {isValidatedState && (
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 text-xs font-extrabold border border-emerald-300 dark:border-emerald-800 shrink-0 self-start sm:self-center">
+              <ShieldCheck className="w-4 h-4 text-emerald-600" />
+              <span>Correction validée & scellée</span>
+            </div>
+          )}
         </div>
 
-        <div className="grid grid-cols-1 sm:flex sm:flex-wrap items-stretch sm:items-center gap-2 w-full sm:w-auto">
-          {/* Valider la correction de la classe Button */}
-          <button
-            type="button"
-            onClick={() => {
-              if (isValidatedState) {
-                setIsValidatedState(false);
-              } else {
-                setIsConfirmValidationModalOpen(true);
-              }
-            }}
-            id="btn-validate-class-correction"
-            className={`inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold transition-colors cursor-pointer shadow-2xs ${
-              isValidatedState
-                ? 'bg-emerald-700 text-white'
-                : 'bg-emerald-600 hover:bg-emerald-700 text-white'
-            }`}
-            title="Confirmer définitivement les notes et les archiver automatiquement dans l'historique global"
-          >
-            <ShieldCheck className="w-4 h-4" />
-            <span>{isValidatedState ? '✓ Correction validée' : 'Valider la correction de la classe'}</span>
-          </button>
-
-          {onSaveToHistory && (
+        {/* Action Buttons Toolbar: Prominent & Airy */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          {/* Primary Action: Imprimer / Télécharger les fiches (Mis en avant) */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 flex-1">
             <button
               type="button"
-              onClick={handleSaveEvaluation}
-              id="btn-save-history"
-              className={`inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-xs ${
-                savedBadge
-                  ? 'bg-emerald-600 text-white'
-                  : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200'
-              }`}
-              title="Conserver cette évaluation dans l'onglet Historique pour le suivi des élèves"
+              onClick={onOpenPrint}
+              id="btn-open-print-sheets"
+              className="inline-flex items-center justify-center gap-2 px-5 py-3 sm:py-2.5 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 hover:from-blue-500 hover:to-indigo-500 text-white text-xs sm:text-sm font-extrabold transition-all shadow-md shadow-blue-500/20 active:scale-[0.98] cursor-pointer border border-blue-400/30"
+              title="Télécharger et imprimer toutes les fiches d'évaluation individuelles (PDF A4)"
             >
-              {savedBadge ? <BookmarkCheck className="w-4 h-4" /> : <Bookmark className="w-4 h-4" />}
-              <span>{savedBadge ? '✓ Enregistré !' : 'Sauvegarder dans l\'historique'}</span>
+              <Printer className="w-4.5 h-4.5 shrink-0" />
+              <span>Imprimer les fiches élèves ({gradedList.length})</span>
             </button>
-          )}
 
-          <button
-            type="button"
-            onClick={exportCsv}
-            id="btn-export-csv"
-            className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold transition-colors cursor-pointer"
-            title="Exporter pour Pronote ou ÉcoleDirecte"
-          >
-            {copiedCsvNotice ? <Check className="w-4 h-4 text-emerald-600" /> : <Download className="w-4 h-4 text-slate-600" />}
-            <span>{copiedCsvNotice ? 'CSV téléchargé !' : 'Export CSV / Pronote'}</span>
-          </button>
+            <button
+              type="button"
+              onClick={exportCsv}
+              id="btn-export-csv"
+              className="inline-flex items-center justify-center gap-2 px-4 py-3 sm:py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100 text-xs font-bold transition-colors cursor-pointer border border-slate-200 dark:border-slate-700 shadow-2xs"
+              title="Exporter pour Pronote ou ÉcoleDirecte"
+            >
+              {copiedCsvNotice ? <Check className="w-4 h-4 text-emerald-600 shrink-0" /> : <Download className="w-4 h-4 text-slate-600 dark:text-slate-300 shrink-0" />}
+              <span>{copiedCsvNotice ? 'CSV téléchargé !' : 'Export CSV / Pronote'}</span>
+            </button>
+          </div>
 
-          <button
-            type="button"
-            onClick={onOpenPrint}
-            id="btn-open-print-sheets"
-            className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-colors shadow-xs cursor-pointer"
-          >
-            <Printer className="w-4 h-4" />
-            <span>Imprimer les fiches élèves</span>
-          </button>
-
-          {onSwapSubmissions && submissions.length > 1 && (
+          {/* Secondary Actions */}
+          <div className="flex flex-wrap items-center gap-2 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100 dark:border-slate-800">
+            {/* Valider la correction de la classe Button */}
             <button
               type="button"
               onClick={() => {
-                setSwapStudent1Id(submissions[0]?.id || '');
-                setSwapStudent2Id(submissions[1]?.id || '');
-                setIsSwapModalOpen(true);
+                if (isValidatedState) {
+                  setIsValidatedState(false);
+                } else {
+                  setIsConfirmValidationModalOpen(true);
+                }
               }}
-              id="btn-open-swap-modal"
-              className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 text-xs font-bold transition-colors cursor-pointer shadow-xs"
-              title="Intervertir deux copies si des noms ont été intervertis"
+              id="btn-validate-class-correction"
+              className={`inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-colors cursor-pointer shadow-2xs ${
+                isValidatedState
+                  ? 'bg-emerald-700 text-white'
+                  : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+              }`}
+              title="Confirmer définitivement les notes et les archiver automatiquement dans l'historique global"
             >
-              <ArrowLeftRight className="w-4 h-4 text-amber-700" />
-              <span>Intervertir 2 copies</span>
+              <ShieldCheck className="w-4 h-4" />
+              <span>{isValidatedState ? '✓ Validée' : 'Valider la classe'}</span>
             </button>
-          )}
+
+            {onSaveToHistory && (
+              <button
+                type="button"
+                onClick={handleSaveEvaluation}
+                id="btn-save-history"
+                className={`inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-xs ${
+                  savedBadge
+                    ? 'bg-emerald-600 text-white'
+                    : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 dark:bg-indigo-950/40 dark:text-indigo-300 dark:border-indigo-800'
+                }`}
+                title="Conserver cette évaluation dans l'onglet Historique pour le suivi des élèves"
+              >
+                {savedBadge ? <BookmarkCheck className="w-4 h-4" /> : <Bookmark className="w-4 h-4" />}
+                <span>{savedBadge ? '✓ Enregistré !' : 'Historique'}</span>
+              </button>
+            )}
+
+            {onSwapSubmissions && submissions.length > 1 && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSwapStudent1Id(submissions[0]?.id || '');
+                  setSwapStudent2Id(submissions[1]?.id || '');
+                  setIsSwapModalOpen(true);
+                }}
+                id="btn-open-swap-modal"
+                className="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 dark:bg-amber-950/40 dark:text-amber-200 dark:border-amber-800 text-xs font-bold transition-colors cursor-pointer shadow-xs"
+                title="Intervertir deux copies si des noms ont été intervertis"
+              >
+                <ArrowLeftRight className="w-3.5 h-3.5 text-amber-700 dark:text-amber-400" />
+                <span className="hidden sm:inline">Intervertir copies</span>
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -1452,6 +1472,39 @@ export const Step4Dashboard: React.FC<Step4DashboardProps> = ({
           </div>
         </div>
       )}
+
+      {/* Mobile Fixed Bottom Action Bar for Step 4: Always accessible */}
+      <div className="lg:hidden fixed inset-x-0 bottom-0 z-40 border-t border-slate-200/90 bg-white/95 px-3.5 pt-3 pb-[max(0.85rem,env(safe-area-inset-bottom))] backdrop-blur-md shadow-[0_-8px_24px_rgba(0,0,0,0.08)] dark:border-slate-800 dark:bg-slate-950/95">
+        <div className="flex items-center gap-2 max-w-lg mx-auto">
+          {/* Main Print / Download Action */}
+          <button
+            type="button"
+            onClick={onOpenPrint}
+            id="btn-mobile-fixed-print-sheets"
+            className="flex-1 flex h-13 items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 px-3.5 text-white text-xs sm:text-sm font-extrabold shadow-lg shadow-blue-500/25 active:scale-[0.98] transition-all cursor-pointer border border-blue-400/30"
+            title="Imprimer ou télécharger toutes les fiches de correction en PDF"
+          >
+            <Printer className="h-4 w-4 shrink-0" />
+            <span className="truncate">Imprimer les fiches ({gradedList.length})</span>
+          </button>
+
+          {/* Export CSV Pronote */}
+          <button
+            type="button"
+            onClick={exportCsv}
+            id="btn-mobile-fixed-export-csv"
+            className="flex h-13 items-center justify-center gap-1.5 rounded-2xl px-3.5 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100 text-xs font-bold border border-slate-300 dark:border-slate-700 cursor-pointer transition-colors shrink-0"
+            title="Exporter les notes vers Pronote ou tableur"
+          >
+            {copiedCsvNotice ? (
+              <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+            ) : (
+              <Download className="w-4 h-4 text-slate-600 dark:text-slate-300 shrink-0" />
+            )}
+            <span className="whitespace-nowrap">{copiedCsvNotice ? 'Copié !' : 'Pronote CSV'}</span>
+          </button>
+        </div>
+      </div>
     </div>
   );
 };

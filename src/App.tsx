@@ -1218,11 +1218,11 @@ export default function App() {
                       submissions={submissions}
                       onSubmissionsChange={setSubmissions}
                       onFinish={() => {
-                        handleSaveCurrentEvaluation(activeTeacherNotes, true);
+                        handleSaveToHistory(activeTeacherNotes, true);
                         goToStep(4);
                       }}
                       onViewDashboard={() => {
-                        handleSaveCurrentEvaluation(activeTeacherNotes, false);
+                        handleSaveToHistory(activeTeacherNotes, false);
                         goToStep(4);
                       }}
                       onBack={handleBack}

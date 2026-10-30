@@ -2971,23 +2971,26 @@ IMPORTANT : Ne pose AUCUNE question. Remplis directement le JSON avec les inform
                   }
 
                   // Inscription dans credit_ledger
-                  await supabaseServer
-                    .from('credit_ledger')
-                    .insert({
-                      teacher_id: targetTeacherId,
-                      delta: -1,
-                      credit_type: chosenType,
-                      action_type: 'correction_consume',
-                      submission_id: null,
-                      metadata: {
-                        student_name: studentName || 'Élève',
-                        note: parsed.note,
-                        note_sur: parsed.note_sur || 20,
-                        source: 'praxis_correction_engine',
-                        timestamp: new Date().toISOString(),
-                      },
-                    })
-                    .catch((errLedger: any) => console.warn('[Supabase Ledger] Warning insertion:', errLedger));
+                  try {
+                    await supabaseServer
+                      .from('credit_ledger')
+                      .insert({
+                        teacher_id: targetTeacherId,
+                        delta: -1,
+                        credit_type: chosenType,
+                        action_type: 'correction_consume',
+                        submission_id: null,
+                        metadata: {
+                          student_name: studentName || 'Élève',
+                          note: parsed.note,
+                          note_sur: parsed.note_sur || 20,
+                          source: 'praxis_correction_engine',
+                          timestamp: new Date().toISOString(),
+                        },
+                      });
+                  } catch (errLedger: any) {
+                    console.warn('[Supabase Ledger] Warning insertion:', errLedger);
+                  }
                 }
               } else {
                 // Si le RPC a réussi, synchroniser l'état local avec la base

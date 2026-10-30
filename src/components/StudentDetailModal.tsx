@@ -459,6 +459,7 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
           subtitle={`${config?.subject || 'Évaluation'} ${config?.className ? `– ${config.className}` : ''}`.trim()}
           onBack={onClose}
           onOpenMenu={() => setMobileExportSheetOpen(true)}
+          onDownload={() => setMobileExportSheetOpen(true)}
         />
 
         {/* Desktop Modal Header: Untouched for >= lg screens */}
@@ -1546,6 +1547,9 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
               handleDownload('png');
             } else if (format === 'pdf-paginated') {
               handleDownload('pdf_a4');
+            } else if (format === 'print') {
+              // Direct Print: trigger window.print with brief delay for layout
+              window.print();
             }
           }}
           onSave={handleSaveChanges}
