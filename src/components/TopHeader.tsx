@@ -258,28 +258,34 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
           </button>
 
           {isNotifOpen && (
-            <div className="absolute right-0 mt-2 w-84 sm:w-96 bg-white dark:bg-slate-900 rounded-xl shadow-xl border border-slate-200 dark:border-slate-800 p-3 space-y-2 z-50 text-xs">
-              <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
-                <div className="flex items-center gap-1.5">
-                  <span className="font-semibold text-slate-900 dark:text-white">Annonces & Notifications</span>
+            <>
+              {/* Backdrop for mobile */}
+              <div
+                className="fixed inset-0 z-40 bg-black/30 backdrop-blur-xs sm:hidden"
+                onClick={() => setIsNotifOpen(false)}
+              />
+              <div className="fixed inset-x-3 top-16 sm:absolute sm:inset-auto sm:right-0 sm:top-full sm:mt-2 w-auto sm:w-96 max-w-[calc(100vw-1.5rem)] bg-white dark:bg-slate-900 rounded-2xl sm:rounded-xl shadow-2xl border border-slate-200 dark:border-slate-800 p-3.5 space-y-2 z-50 text-xs">
+                <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className="font-bold text-slate-900 dark:text-white truncate">Annonces & Notifications</span>
+                    {unreadCount > 0 && (
+                      <span className="bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded-full text-[10px] font-semibold shrink-0">
+                        {unreadCount}
+                      </span>
+                    )}
+                  </div>
                   {unreadCount > 0 && (
-                    <span className="bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded-full text-[10px] font-semibold">
-                      {unreadCount} nouvelle{unreadCount > 1 ? 's' : ''}
-                    </span>
+                    <button
+                      type="button"
+                      onClick={markAllAsRead}
+                      className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline font-medium cursor-pointer shrink-0 ml-2"
+                    >
+                      Tout marquer comme lu
+                    </button>
                   )}
                 </div>
-                {unreadCount > 0 && (
-                  <button
-                    type="button"
-                    onClick={markAllAsRead}
-                    className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline font-medium cursor-pointer"
-                  >
-                    Tout marquer comme lu
-                  </button>
-                )}
-              </div>
 
-              <div className="max-h-96 overflow-y-auto space-y-2 pt-1 divide-y divide-slate-100 dark:divide-slate-800/60">
+                <div className="max-h-[65vh] sm:max-h-96 overflow-y-auto space-y-2 pt-1 divide-y divide-slate-100 dark:divide-slate-800/60 pr-1">
                 {notifications.length === 0 ? (
                   <div className="text-center py-6 text-slate-400 dark:text-slate-500">
                     <Bell className="w-6 h-6 mx-auto mb-1.5 opacity-40" />
@@ -363,8 +369,9 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
                 )}
               </div>
             </div>
-          )}
-        </div>
+          </>
+        )}
+      </div>
 
         {/* Profile Dropdown */}
         <div className="relative" ref={profileRef}>

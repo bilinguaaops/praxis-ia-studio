@@ -461,10 +461,10 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
           onOpenMenu={() => setMobileExportSheetOpen(true)}
         />
 
-        {/* Desktop Modal Header: Untouched for >= md screens */}
+        {/* Desktop Modal Header: Untouched for >= lg screens */}
         <div
           onDoubleClick={toggleModalMaximize}
-          className={`hidden md:flex bg-slate-900 text-white flex-wrap sm:flex-nowrap items-center justify-between border-b border-slate-800 shrink-0 select-none transition-all gap-2 ${
+          className={`hidden lg:flex bg-slate-900 text-white flex-wrap sm:flex-nowrap items-center justify-between border-b border-slate-800 shrink-0 select-none transition-all gap-2 ${
             isModalMaximized ? 'px-4 py-2.5' : 'px-4 sm:px-6 py-3 sm:py-4'
           }`}
           title="Double-cliquer pour agrandir en grand écran ou réduire"
@@ -481,13 +481,13 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
                   onChange={(e) => setStudentName(e.target.value)}
                   className="bg-transparent font-extrabold text-base sm:text-lg text-white border-b border-transparent hover:border-slate-600 focus:border-blue-400 focus:outline-hidden px-1 -ml-1 transition-colors max-w-[200px] sm:max-w-xs truncate"
                 />
-                <span className="text-xs text-slate-400 shrink-0">
-                  ({submission.fileName} {pages.length > 1 ? `• ${pages.length} pages` : ''})
+                <span className="text-xs text-slate-400 shrink-0 hidden lg:inline max-w-[160px] truncate" title={submission.fileName}>
+                  ({pages.length > 1 ? `${pages.length} p.` : '1 p.'})
                 </span>
 
                 {result.nom_manuscrit_detecte && (
                   <span
-                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-400/30 text-[10px] font-semibold"
+                    className="hidden xl:inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-400/30 text-[10px] font-semibold"
                     title={`Nom manuscrit identifié en marge ou en-tête de la copie papier : ${result.nom_manuscrit_detecte}`}
                   >
                     <span>✍️ En marge : {result.nom_manuscrit_detecte}</span>
@@ -596,7 +596,13 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
             <div className="relative inline-block">
               <button
                 type="button"
-                onClick={() => setShowDownloadDropdown(!showDownloadDropdown)}
+                onClick={() => {
+                  if (typeof window !== 'undefined' && window.innerWidth < 768) {
+                    setMobileExportSheetOpen(true);
+                  } else {
+                    setShowDownloadDropdown(!showDownloadDropdown);
+                  }
+                }}
                 disabled={isDownloading}
                 id="btn-modal-download-header"
                 className="inline-flex items-center gap-1 px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-all cursor-pointer shadow-xs disabled:opacity-50"
@@ -614,10 +620,10 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
               {showDownloadDropdown && (
                 <>
                   <div
-                    className="fixed inset-0 z-40"
+                    className="fixed inset-0 z-40 bg-black/20 sm:bg-transparent"
                     onClick={() => setShowDownloadDropdown(false)}
                   />
-                  <div className="absolute top-full right-0 mt-2 w-80 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-2 z-50 text-white text-xs space-y-1 animate-in fade-in zoom-in-95 duration-100">
+                  <div className="fixed inset-x-3 top-16 sm:absolute sm:inset-auto sm:top-full sm:right-0 mt-2 w-auto sm:w-80 max-w-[calc(100vw-1.5rem)] bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-2 z-50 text-white text-xs space-y-1 animate-in fade-in zoom-in-95 duration-100">
                     <div className="px-3 py-2 border-b border-slate-800">
                       <span className="font-bold text-slate-100 block">Télécharger la copie corrigée</span>
                       <span className="text-[11px] text-slate-400">
@@ -707,12 +713,12 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
               )}
             </div>
 
-            {/* Zero-Scroll / Compact Density Toggle */}
+            {/* Zero-Scroll / Compact Density Toggle: Desktop only (>= lg) */}
             <button
               type="button"
               onClick={toggleCompactNoScroll}
               id="btn-modal-toggle-compact"
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer border ${
+              className={`hidden lg:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer border ${
                 compactNoScroll
                   ? 'bg-blue-600/30 text-blue-200 border-blue-400/40 hover:bg-blue-600/50'
                   : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700 hover:text-white'
@@ -724,17 +730,17 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
               }
             >
               <Layers className="w-3.5 h-3.5 text-sky-400" />
-              <span className="hidden lg:inline">
+              <span>
                 {compactNoScroll ? 'Sans défiler ✓' : 'Vue compacte'}
               </span>
             </button>
 
-            {/* Window Fullscreen (Grand écran) Toggle Button */}
+            {/* Window Fullscreen (Grand écran) Toggle Button: Desktop only (>= lg) */}
             <button
               type="button"
               onClick={toggleModalMaximize}
               id="btn-modal-toggle-maximize"
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border shadow-xs ${
+              className={`hidden lg:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border shadow-xs ${
                 isModalMaximized
                   ? 'bg-amber-500/20 text-amber-300 border-amber-400/40 hover:bg-amber-500/30'
                   : 'bg-sky-600 hover:bg-sky-500 text-white border-sky-400/40'
@@ -748,12 +754,12 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
               {isModalMaximized ? (
                 <>
                   <Minimize2 className="w-3.5 h-3.5 text-amber-400" />
-                  <span className="hidden sm:inline">Réduire</span>
+                  <span>Réduire</span>
                 </>
               ) : (
                 <>
                   <Maximize2 className="w-3.5 h-3.5 text-white" />
-                  <span className="hidden sm:inline">Grand écran</span>
+                  <span>Grand écran</span>
                 </>
               )}
             </button>
@@ -780,8 +786,8 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
           </div>
         </div>
 
-        {/* Mobile View Mode Switcher (< md : 2 onglets pleine largeur faciles à toucher ; md à lg : vue 3 onglets) */}
-        <div className="md:hidden bg-slate-100 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 p-2 shrink-0">
+        {/* Mobile & Tablet View Mode Switcher (< lg : 2 onglets pleine largeur ergonomiques et tactiles) */}
+        <div className="lg:hidden bg-slate-100 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 p-2 shrink-0">
           <div className="grid grid-cols-2 gap-1.5 bg-slate-200/70 dark:bg-slate-950 p-1 rounded-xl">
             <button
               type="button"
@@ -804,46 +810,6 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
               }`}
             >
               <span>Copie papier ({pages.length > 1 ? `${activePageIndex + 1}/${pages.length}` : '1 p.'})</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Tablet View Mode Switcher (Visible on md to lg screens only) */}
-        <div className="hidden md:flex lg:hidden bg-slate-800 border-b border-slate-700 px-3 py-2 items-center justify-between text-xs font-bold shrink-0">
-          <span className="text-slate-300 text-[11px]">Affichage :</span>
-          <div className="flex items-center gap-1 bg-slate-900 p-0.5 rounded-lg border border-slate-700/60">
-            <button
-              type="button"
-              onClick={() => setMobileTab('copy')}
-              className={`px-3 py-1 rounded-md transition-colors cursor-pointer text-xs font-semibold ${
-                mobileTab === 'copy'
-                  ? 'bg-blue-600 text-white shadow-xs'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              Copie
-            </button>
-            <button
-              type="button"
-              onClick={() => setMobileTab('review')}
-              className={`px-3 py-1 rounded-md transition-colors cursor-pointer text-xs font-semibold ${
-                mobileTab === 'review'
-                  ? 'bg-blue-600 text-white shadow-xs'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              Évaluation & Note
-            </button>
-            <button
-              type="button"
-              onClick={() => setMobileTab('split')}
-              className={`px-3 py-1 rounded-md transition-colors cursor-pointer text-xs font-semibold ${
-                mobileTab === 'split'
-                  ? 'bg-blue-600 text-white shadow-xs'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              Vue partagée
             </button>
           </div>
         </div>
@@ -1003,7 +969,7 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
               mobileTab === 'copy' ? 'hidden lg:block' : 'block'
             } ${
               mobileTab === 'split' ? 'h-[55vh]' : 'h-full'
-            } lg:h-full bg-slate-50 overflow-y-auto pb-28 md:pb-6 ${
+            } lg:h-full bg-slate-50 overflow-y-auto pb-28 lg:pb-6 ${
               compactNoScroll ? 'p-3 sm:p-4 space-y-3 text-xs' : 'p-3.5 sm:p-6 space-y-4 sm:space-y-6'
             }`}
           >
@@ -1152,7 +1118,7 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
                   </div>
                 </div>
 
-                <div className="hidden md:flex items-center gap-2 self-stretch sm:self-center justify-end shrink-0">
+                <div className="hidden lg:flex items-center gap-2 self-stretch sm:self-center justify-end shrink-0">
                   {statutValidation === 'valide_professeur' ? (
                     <button
                       type="button"
@@ -1487,17 +1453,17 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
           </div>
         </div>
 
-        {/* Modal Footer (Desktop only: hidden md:flex) */}
+        {/* Modal Footer (Desktop only: hidden lg:flex) */}
         <div
-          className={`hidden md:flex bg-white border-t border-slate-200 items-center justify-between shrink-0 flex-wrap gap-2 transition-all ${
+          className={`hidden lg:flex bg-white border-t border-slate-200 items-center justify-between shrink-0 flex-wrap gap-2 transition-all ${
             compactNoScroll ? 'px-4 py-2' : 'px-6 py-3.5'
           }`}
         >
           <div className="flex items-center gap-2 text-xs text-slate-500">
-            <span className="hidden md:inline">
+            <span className="hidden xl:inline">
               Les ajustements mettent automatiquement à jour les statistiques de la classe.
             </span>
-            <span className="text-[11px] text-slate-500 bg-slate-100 px-2 py-0.5 rounded border border-slate-200 inline-flex items-center gap-1">
+            <span className="text-[11px] text-slate-500 bg-slate-100 px-2 py-0.5 rounded border border-slate-200 hidden xl:inline-flex items-center gap-1">
               Raccourci : <kbd className="font-mono font-bold text-slate-800">F</kbd> (Plein écran)
             </span>
           </div>

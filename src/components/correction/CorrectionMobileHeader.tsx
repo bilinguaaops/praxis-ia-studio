@@ -10,7 +10,7 @@ type Props = {
 
 export default function CorrectionMobileHeader({ title, subtitle, onBack, onOpenMenu }: Props) {
   return (
-    <header className="md:hidden sticky top-0 z-30 flex items-center gap-2 border-b border-slate-200 bg-white/95 px-2 py-2 backdrop-blur dark:border-slate-800 dark:bg-slate-950/95 pt-[max(0.5rem,env(safe-area-inset-top))]">
+    <header className="lg:hidden sticky top-0 z-30 flex items-center gap-2 border-b border-slate-200 bg-white/95 px-2 py-2 backdrop-blur dark:border-slate-800 dark:bg-slate-950/95 pt-[max(0.5rem,env(safe-area-inset-top))]">
       <button
         type="button"
         onClick={onBack}

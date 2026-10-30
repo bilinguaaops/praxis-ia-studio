@@ -21,7 +21,7 @@ export default function ExportSheet({ open, onClose, onExport, onSave, onSwap }:
   if (!open) return null;
 
   return (
-    <div className="md:hidden fixed inset-0 z-50">
+    <div className="lg:hidden fixed inset-0 z-50">
       <button
         type="button"
         aria-label="Fermer"

@@ -15,7 +15,7 @@ export default function CorrectionMobileActionBar({
   onDownload,
 }: Props) {
   return (
-    <div className="md:hidden fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 px-3 pt-3 backdrop-blur dark:border-slate-800 dark:bg-slate-950/95 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+    <div className="lg:hidden fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 px-3 pt-3 backdrop-blur dark:border-slate-800 dark:bg-slate-950/95 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
       <div className="flex gap-2">
         <button
           type="button"
