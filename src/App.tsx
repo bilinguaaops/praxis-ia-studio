@@ -153,44 +153,13 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  // Effective authenticated lead : fusion robuste entre Supabase, profil local et historique
-  // Garantit que le décompte des 15 copies gratuites diminue immédiatement à chaque copie corrigée
+  // Effective authenticated lead : Supabase PostgreSQL est la SOURCE DE VÉRITÉ UNIQUE
+  // Aucun calcul local dérivé du localStorage ne doit altérer les soldes réels de credit_balances.
   const currentLead: LeadData | null = useMemo(() => {
-    if (!supabaseLead && !localLead) return null;
-    const base = supabaseLead || localLead!;
-
-    const localCopies = localLead?.copiesCorrected || 0;
-    const supabaseCopies = supabaseLead?.copiesCorrected || 0;
-
-    let storageHistoryCopies = 0;
-    try {
-      const savedEvs = localStorage.getItem('cpro_evaluations');
-      if (savedEvs) {
-        const parsedEvs = JSON.parse(savedEvs);
-        if (Array.isArray(parsedEvs)) {
-          storageHistoryCopies = parsedEvs.reduce((sum: number, ev: any) => sum + (ev.submissions?.length || 0), 0);
-        }
-      }
-    } catch {}
-
-    const effectiveUsed = Math.max(localCopies, supabaseCopies, storageHistoryCopies);
-
-    const isPaid = base.plan && base.plan !== 'free' && base.plan !== 'trial';
-    const trialCap = 15;
-    const quota = isPaid ? (base.quota || 15) : trialCap;
-    const remainingTrial = Math.max(0, trialCap - effectiveUsed);
-
-    const subCredits = isPaid
-      ? Math.max(0, (base.subscriptionCredits || 0) - Math.max(0, effectiveUsed - (supabaseLead?.copiesCorrected || 0)))
-      : remainingTrial;
-
-    return {
-      ...base,
-      copiesCorrected: effectiveUsed,
-      quota,
-      subscriptionCredits: subCredits,
-      extraCredits: localLead?.extraCredits ?? base.extraCredits ?? 0,
-    };
+    if (supabaseLead) {
+      return supabaseLead;
+    }
+    return localLead;
   }, [supabaseLead, localLead]);
 
   // Paystack Return / Callback Handler
@@ -1242,18 +1211,12 @@ export default function App() {
                       onRequireRegistration={() => setIsLeadGateOpen(true)}
                       onOpenPaywall={() => handleOpenPaywall('quarterly')}
                       onLeadChange={(updatedLead) => {
+                        refreshProfile();
                         setLocalLead((prev) => ({
                           ...(prev || {}),
                           ...updatedLead,
                           copiesCorrected: Math.max(prev?.copiesCorrected || 0, updatedLead.copiesCorrected || 0),
                         }));
-                        try {
-                          localStorage.setItem('praxis_lead', JSON.stringify(updatedLead));
-                          localStorage.setItem('cpro_lead', JSON.stringify(updatedLead));
-                        } catch {}
-                        if (recordCopiesCorrected && updatedLead.copiesCorrected) {
-                          recordCopiesCorrected(updatedLead.copiesCorrected);
-                        }
                       }}
                     />
                   )}

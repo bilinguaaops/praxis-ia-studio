@@ -1582,7 +1582,7 @@ RÉPONDS UNIQUEMENT SOUS FORME D'UN OBJET JSON STRICT.`;
 // Primary correction endpoint
 app.post('/api/correct', async (req, res) => {
   try {
-    const { studentName, studentImage, allPages, studentPages, photos, images, assignmentConfig, userEmail: bodyEmail } = req.body;
+    const { studentName, studentImage, allPages, studentPages, photos, images, assignmentConfig, userEmail: bodyEmail, userId: bodyUserId, submissionId: bodySubId } = req.body;
 
     // Teacher Identification & Auto-provisioning if first time
     const headerEmail = (req.headers['x-user-email'] as string) || '';
@@ -2841,6 +2841,60 @@ IMPORTANT : Ne pose AUCUNE question. Remplis directement le JSON avec les inform
           lead.subscriptionCredits -= 1;
         } else if (typeof lead.extraCredits === 'number' && lead.extraCredits > 0) {
           lead.extraCredits -= 1;
+        }
+
+        // --- SOURCE DE VÉRITÉ UNIQUE : Décompte transactionnel dans PostgreSQL / Supabase ---
+        const supabaseServer = getSupabaseServerClient();
+        let targetTeacherId = (bodyUserId || (req.headers['x-user-id'] as string) || '').toString().trim();
+
+        if (supabaseServer) {
+          try {
+            if (!targetTeacherId && cleanUserEmail && cleanUserEmail !== 'professeur@praxis.edu') {
+              const { data: prof } = await supabaseServer
+                .from('profiles')
+                .select('id')
+                .eq('email', cleanUserEmail)
+                .maybeSingle();
+              if (prof?.id) {
+                targetTeacherId = prof.id;
+              }
+            }
+
+            if (targetTeacherId) {
+              // Assurer un format UUID v4 valide
+              let subUuid = (bodySubId || '').toString().trim();
+              const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+              if (!uuidRegex.test(subUuid)) {
+                subUuid = crypto.randomUUID();
+              }
+
+              const { data: rpcData, error: rpcError } = await supabaseServer.rpc('consume_correction_credit', {
+                p_teacher_id: targetTeacherId,
+                p_submission_id: subUuid,
+              });
+
+              if (rpcError) {
+                console.warn('[Supabase RPC] Erreur consume_correction_credit:', rpcError.message);
+              } else {
+                console.log('[Supabase RPC] Débit réussi pour', cleanUserEmail, rpcData);
+                // Mettre à jour l'état local avec les données réelles et certifiées de la base
+                const { data: dbBal } = await supabaseServer
+                  .from('credit_balances')
+                  .select('*')
+                  .eq('teacher_id', targetTeacherId)
+                  .maybeSingle();
+
+                if (dbBal) {
+                  lead.copiesCorrected = dbBal.total_copies_corrected;
+                  lead.subscriptionCredits = dbBal.free_credits + dbBal.subscription_credits;
+                  lead.extraCredits = dbBal.purchased_credits;
+                  lead.quota = dbBal.total_available_credits + dbBal.total_copies_corrected;
+                }
+              }
+            }
+          } catch (supaErr) {
+            console.warn('[Supabase RPC] Exception consume_correction_credit:', supaErr);
+          }
         }
       }
       lead.quota = (lead.copiesCorrected || 0) + (lead.subscriptionCredits || 0) + (lead.extraCredits || 0);

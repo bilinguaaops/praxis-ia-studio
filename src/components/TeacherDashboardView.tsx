@@ -42,13 +42,10 @@ export const TeacherDashboardView: React.FC<TeacherDashboardViewProps> = ({
 }) => {
   const teacherName = currentLead?.name ? currentLead.name.split(' ')[0] : 'Professeur';
 
-  // Credits calculation (Garantie de 15 crédits d'essai offerts pour tout nouvel enseignant)
+  // Source de vérité unique issue de credit_balances
   const isTrial = !currentLead?.plan || currentLead.plan === 'trial' || currentLead.plan === 'free';
-  const rawSubCredits = currentLead?.subscriptionCredits ?? 15;
   const copiesUsed = currentLead?.copiesCorrected ?? 0;
-  const subscriptionCredits = isTrial
-    ? Math.max(0, (currentLead?.quota || 15) - copiesUsed)
-    : rawSubCredits;
+  const subscriptionCredits = currentLead?.subscriptionCredits ?? 0;
   const extraCredits = currentLead?.extraCredits ?? 0;
   const totalCredits = subscriptionCredits + extraCredits;
 

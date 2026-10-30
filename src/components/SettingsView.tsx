@@ -468,7 +468,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     : 'Période d’essai gratuit'}
                 </h3>
                 <p className="text-xs text-slate-600 mt-1">
-                  Solde actuel : <strong>{(currentLead?.subscriptionCredits ?? 460) + (currentLead?.extraCredits ?? 0)} corrections</strong> disponibles
+                  Solde actuel : <strong>{(currentLead?.subscriptionCredits ?? 0) + (currentLead?.extraCredits ?? 0)} corrections</strong> disponibles
                 </p>
               </div>
 

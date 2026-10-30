@@ -115,10 +115,13 @@ export const Step3Progress: React.FC<Step3ProgressProps> = ({
         headers: {
           'Content-Type': 'application/json',
           'x-user-email': activeLead.email,
+          'x-user-id': activeLead.userId || '',
         },
         signal: controller.signal,
         body: JSON.stringify({
           userEmail: activeLead.email,
+          userId: activeLead.userId,
+          submissionId: sub.id,
           studentName: sub.studentName,
           studentImage: sub.imageDataUrl,
           allPages: sub.allPages && sub.allPages.length > 0 ? sub.allPages : [sub.imageDataUrl],
@@ -478,7 +481,7 @@ export const Step3Progress: React.FC<Step3ProgressProps> = ({
             <div className="px-3 py-1.5 rounded-xl bg-blue-50/80 border border-blue-200 text-blue-900 flex items-center gap-1.5">
               <span className="text-[10px] uppercase font-bold text-blue-600">Abonnement :</span>
               <strong className="font-mono text-sm font-black text-blue-700">
-                {activeLead.subscriptionCredits ?? 50}
+                {activeLead.subscriptionCredits ?? 0}
               </strong>
               <span className="text-[10px] text-blue-500 font-semibold">/ 1 500 max</span>
             </div>

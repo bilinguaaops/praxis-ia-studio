@@ -883,35 +883,42 @@ BEGIN
     ) ON CONFLICT (id) DO UPDATE SET
         referral_code = COALESCE(public.profiles.referral_code, EXCLUDED.referral_code);
 
-    -- 2. Créer le compte de solde avec les 50 corrections gratuites offertes
+    -- 2. Créer le compte de solde avec les 15 corrections gratuites offertes
     INSERT INTO public.credit_balances (
         teacher_id,
         free_credits,
         subscription_credits,
         purchased_credits,
-        frozen_subscription_credits
+        frozen_subscription_credits,
+        total_copies_corrected
     ) VALUES (
         NEW.id,
-        50,
+        15,
+        0,
         0,
         0,
         0
     ) ON CONFLICT (teacher_id) DO NOTHING;
 
-    -- 3. Inscription de bienvenue dans le grand livre (50 crédits gratuits)
-    INSERT INTO public.credit_ledger (
-        teacher_id,
-        delta,
-        credit_type,
-        action_type,
-        metadata
-    ) VALUES (
-        NEW.id,
-        50,
-        'free',
-        'initial_grant',
-        jsonb_build_object('description', '50 corrections gratuites offertes à l''inscription')
-    );
+    -- 3. Inscription de bienvenue dans le grand livre (15 crédits gratuits)
+    IF NOT EXISTS (
+        SELECT 1 FROM public.credit_ledger 
+        WHERE teacher_id = NEW.id AND action_type = 'initial_grant'
+    ) THEN
+        INSERT INTO public.credit_ledger (
+            teacher_id,
+            delta,
+            credit_type,
+            action_type,
+            metadata
+        ) VALUES (
+            NEW.id,
+            15,
+            'free',
+            'initial_grant',
+            jsonb_build_object('description', '15 corrections gratuites offertes à l''inscription')
+        );
+    END IF;
 
     -- 4. Abonnement gratuit initial
     INSERT INTO public.subscriptions (

@@ -1339,15 +1339,15 @@ export const Step2Upload: React.FC<Step2UploadProps> = ({
                 </span>
               </div>
               <p className="text-slate-600 dark:text-slate-400 text-xs mt-0.5">
-                Solde actuel : <strong className="font-mono text-blue-600 dark:text-blue-400">{(currentLead?.subscriptionCredits ?? 50) + (currentLead?.extraCredits ?? 0)} corrections</strong>
+                Solde actuel : <strong className="font-mono text-blue-600 dark:text-blue-400">{(currentLead?.subscriptionCredits ?? 0) + (currentLead?.extraCredits ?? 0)} corrections</strong>
                 {' · '}
-                Solde après correction : <strong className="font-mono text-emerald-600 dark:text-emerald-400">{Math.max(0, ((currentLead?.subscriptionCredits ?? 50) + (currentLead?.extraCredits ?? 0)) - submissions.length)} corrections</strong>
+                Solde après correction : <strong className="font-mono text-emerald-600 dark:text-emerald-400">{Math.max(0, ((currentLead?.subscriptionCredits ?? 0) + (currentLead?.extraCredits ?? 0)) - submissions.length)} corrections</strong>
               </p>
             </div>
           </div>
 
           <div className="flex items-center gap-2 self-start sm:self-center">
-            {((currentLead?.subscriptionCredits ?? 50) + (currentLead?.extraCredits ?? 0)) >= submissions.length ? (
+            {((currentLead?.subscriptionCredits ?? 0) + (currentLead?.extraCredits ?? 0)) >= submissions.length ? (
               <span className="px-3 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 text-xs font-semibold border border-emerald-200 dark:border-emerald-800 flex items-center gap-1.5">
                 <Check className="w-3.5 h-3.5" />
                 <span>Crédits suffisants</span>

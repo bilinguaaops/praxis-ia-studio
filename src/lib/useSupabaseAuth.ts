@@ -155,35 +155,66 @@ export function useSupabaseAuth() {
     setSubscription(null);
   }, []);
 
-  // Recharger manuellement les données (ex: après correction d'une copie)
+  // Recharger manuellement les données depuis Supabase
   const refreshProfile = useCallback(async () => {
     if (user?.id) {
       await fetchUserData(user.id);
     }
   }, [user?.id, fetchUserData]);
 
-  // Enregistrer le nombre de copies corrigées et mettre à jour le solde
-  const recordCopiesCorrected = useCallback(async (newCount: number) => {
+  // Écouteur temps réel (Supabase Realtime) & réactualisation sur focus / visibilité
+  useEffect(() => {
     if (!user?.id || !isSupabaseConfigured) return;
-    try {
-      const remainingCredits = Math.max(0, 15 - newCount);
-      await supabase
-        .from('credit_balances')
-        .update({
-          total_copies_corrected: newCount,
-          last_updated_at: new Date().toISOString(),
-        })
-        .eq('teacher_id', user.id);
-      setBalance((prev) => prev ? {
-        ...prev,
-        total_copies_corrected: newCount,
-      } : prev);
-    } catch (err) {
-      console.warn('Could not update Supabase balance:', err);
-    }
-  }, [user?.id]);
+
+    // 1. Invalidation sur reprise de focus de la fenêtre (ex: changement d'onglet ou retour sur l'app)
+    const handleFocus = () => {
+      fetchUserData(user.id);
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        fetchUserData(user.id);
+      }
+    };
+
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    // 2. Abonnement Realtime Supabase sur la table credit_balances pour ce professeur
+    const channel = supabase
+      .channel(`cb_realtime_${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'credit_balances',
+          filter: `teacher_id=eq.${user.id}`,
+        },
+        (payload) => {
+          if (payload.new) {
+            setBalance(payload.new as UserCreditBalance);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id, fetchUserData]);
+
+  // Le client ne doit jamais faire d'UPDATE direct sur credit_balances (sécurité RLS).
+  // recordCopiesCorrected déclenche un rafraîchissement depuis la base après une correction.
+  const recordCopiesCorrected = useCallback(async (_newCount: number) => {
+    if (!user?.id || !isSupabaseConfigured) return;
+    await refreshProfile();
+  }, [user?.id, refreshProfile]);
 
   // Mapper le profil et le solde vers le type LeadData utilisé par Praxis
+  // SOURCE DE VÉRITÉ UNIQUE : Tout provient directement de credit_balances
   const currentLead: LeadData | null = user
     ? {
         name: profile?.full_name || (user.user_metadata?.full_name as string) || (user.email?.split('@')[0] ?? 'Enseignant'),
@@ -192,13 +223,12 @@ export function useSupabaseAuth() {
         school: profile?.school_name || (user.user_metadata?.school_name as string) || 'Établissement non précisé',
         plan: (subscription?.plan_id as SaaSPlan) || 'free',
         status: (subscription?.status as any) || 'active',
+        // Solde réel lu depuis credit_balances en base de données :
         subscriptionCredits: (subscription?.plan_id && subscription.plan_id !== 'free' && subscription.plan_id !== 'trial')
           ? (balance?.subscription_credits ?? 0)
-          : Math.max(0, 15 - (balance?.total_copies_corrected ?? 0)),
+          : (balance?.free_credits ?? 0),
         extraCredits: balance?.purchased_credits ?? 0,
-        quota: (subscription?.plan_id && subscription.plan_id !== 'free' && subscription.plan_id !== 'trial')
-          ? (balance?.total_available_credits ?? 15)
-          : 15,
+        quota: balance ? (balance.total_available_credits ?? (balance.free_credits + balance.subscription_credits + balance.purchased_credits)) : 0,
         copiesCorrected: balance?.total_copies_corrected ?? 0,
         userId: user.id,
         role: profile?.role || 'teacher',
