@@ -8,3 +8,4 @@ coverage/
 !.env.example
 .aistudio/
 public/assets/
+handle_new_user_BACKUP.sql

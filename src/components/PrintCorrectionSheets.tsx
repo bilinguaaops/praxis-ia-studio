@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { AssignmentConfig, StudentSubmission } from '../types';
-import { Printer, X, Download, FileText, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { Printer, X, Download, FileText, CheckCircle2, AlertTriangle, Loader2 } from 'lucide-react';
+import { exportAllCorrectionSheetsPdf } from '../lib/exportUtils';
 
 interface PrintCorrectionSheetsProps {
   config: AssignmentConfig;
@@ -14,9 +15,22 @@ export const PrintCorrectionSheets: React.FC<PrintCorrectionSheetsProps> = ({
   onClose,
 }) => {
   const gradedStudents = submissions.filter((s) => s.status === 'completed' && s.result);
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
 
   const handlePrint = () => {
     window.print();
+  };
+
+  const handleDownloadAllPdf = async () => {
+    if (isExportingPdf) return;
+    setIsExportingPdf(true);
+    try {
+      await exportAllCorrectionSheetsPdf(config, submissions);
+    } catch (e) {
+      console.error('Erreur export fiches PDF :', e);
+    } finally {
+      setIsExportingPdf(false);
+    }
   };
 
   return (
@@ -39,7 +53,22 @@ export const PrintCorrectionSheets: React.FC<PrintCorrectionSheetsProps> = ({
             </div>
           </div>
 
-          <div className="flex items-center gap-2 justify-between sm:justify-end">
+          <div className="flex items-center gap-2 flex-wrap justify-between sm:justify-end">
+            <button
+              type="button"
+              onClick={handleDownloadAllPdf}
+              disabled={isExportingPdf}
+              id="btn-download-all-sheets-pdf"
+              className="inline-flex items-center justify-center gap-2 px-3.5 sm:px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-colors cursor-pointer shadow-xs disabled:opacity-50 flex-1 sm:flex-initial"
+              title="Télécharger directement toutes les fiches en un seul document PDF A4"
+            >
+              {isExportingPdf ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Download className="w-4 h-4" />
+              )}
+              <span>{isExportingPdf ? 'Génération...' : 'Télécharger le dossier complet (PDF)'}</span>
+            </button>
             <button
               type="button"
               onClick={handlePrint}
@@ -47,7 +76,7 @@ export const PrintCorrectionSheets: React.FC<PrintCorrectionSheetsProps> = ({
               className="inline-flex items-center justify-center gap-2 px-3.5 sm:px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition-colors cursor-pointer shadow-xs flex-1 sm:flex-initial"
             >
               <Printer className="w-4 h-4" />
-              <span>Imprimer / PDF</span>
+              <span>Imprimer</span>
             </button>
             <button
               type="button"

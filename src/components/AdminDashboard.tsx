@@ -397,20 +397,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToApp }) =
     }
   };
 
-  // Known master passwords accepted for direct fallback in case of transient network disruption
-  const KNOWN_MASTER_PASSWORDS = [
-    'PraxisShield_2026$8vR2wN',
-    'PraxisMaster_2026#9xV4kP',
-    '2345',
-    '23451',
-    '2341',
-  ];
-
   // Handle Login
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    const cleanPass = masterPassword.trim();
-    if (!cleanPass) {
+    if (!masterPassword.trim()) {
       setAuthError('Veuillez renseigner le mot de passe maître.');
       return;
     }
@@ -422,91 +412,28 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToApp }) =
       const res = await fetch('/api/admin/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: cleanPass }),
+        body: JSON.stringify({ password: masterPassword }),
       });
 
-      let data: any = null;
-      try {
-        data = await res.json();
-      } catch {
-        // Non-JSON response
-      }
+      const data = await res.json();
 
-      if (res.ok && data?.success && data?.token) {
-        // Save token and expiry
-        sessionStorage.setItem('praxis_admin_token', data.token);
-        sessionStorage.setItem('praxis_admin_expires', String(data.expiresAt));
-        localStorage.setItem('praxis_admin_token', data.token);
-        localStorage.setItem('praxis_admin_expires', String(data.expiresAt));
-        setIsAuthenticated(true);
-        setMasterPassword('');
-        showToast('Accès sécurisé accordé au SaaS Admin Praxis.', 'success');
-        return;
-      }
-
-      // If server returned 401 or invalid status
-      if (res.status === 401) {
-        if (KNOWN_MASTER_PASSWORDS.includes(cleanPass)) {
-          const directToken = 'adm_sess_' + Date.now() + '_' + Math.random().toString(36).substring(2, 10);
-          const expiresAt = Date.now() + 8 * 3600 * 1000;
-          sessionStorage.setItem('praxis_admin_token', directToken);
-          sessionStorage.setItem('praxis_admin_expires', String(expiresAt));
-          localStorage.setItem('praxis_admin_token', directToken);
-          localStorage.setItem('praxis_admin_expires', String(expiresAt));
-          setIsAuthenticated(true);
-          setMasterPassword('');
-          showToast('Accès sécurisé accordé au SaaS Admin Praxis.', 'success');
-          return;
-        }
-
+      if (!res.ok || !data.success) {
         setShakeAuth(true);
         setTimeout(() => setShakeAuth(false), 600);
-        setAuthError(data?.error || 'Mot de passe maître incorrect. Accès restreint.');
+        setAuthError(data.error || 'Mot de passe maître invalide.');
         return;
       }
 
-      if (res.status === 429) {
-        setShakeAuth(true);
-        setTimeout(() => setShakeAuth(false), 600);
-        setAuthError(data?.error || 'Trop de tentatives. Veuillez patienter 1 minute.');
-        return;
-      }
-
-      // Fallback for legitimate master password on server glitch
-      if (KNOWN_MASTER_PASSWORDS.includes(cleanPass)) {
-        const directToken = 'adm_sess_' + Date.now() + '_' + Math.random().toString(36).substring(2, 10);
-        const expiresAt = Date.now() + 8 * 3600 * 1000;
-        sessionStorage.setItem('praxis_admin_token', directToken);
-        sessionStorage.setItem('praxis_admin_expires', String(expiresAt));
-        localStorage.setItem('praxis_admin_token', directToken);
-        localStorage.setItem('praxis_admin_expires', String(expiresAt));
-        setIsAuthenticated(true);
-        setMasterPassword('');
-        showToast('Accès sécurisé accordé au SaaS Admin Praxis.', 'success');
-        return;
-      }
-
-      setShakeAuth(true);
-      setTimeout(() => setShakeAuth(false), 600);
-      setAuthError(data?.error || `Erreur de communication avec le serveur (${res.status}).`);
+      // Save token and expiry
+      sessionStorage.setItem('praxis_admin_token', data.token);
+      sessionStorage.setItem('praxis_admin_expires', String(data.expiresAt));
+      localStorage.setItem('praxis_admin_token', data.token);
+      localStorage.setItem('praxis_admin_expires', String(data.expiresAt));
+      setIsAuthenticated(true);
+      setMasterPassword('');
+      showToast('Accès sécurisé accordé au SaaS Admin Praxis.', 'success');
     } catch (err: any) {
-      // In case of offline, tunnel disruption or iframe network error
-      if (KNOWN_MASTER_PASSWORDS.includes(cleanPass)) {
-        const directToken = 'adm_sess_' + Date.now() + '_' + Math.random().toString(36).substring(2, 10);
-        const expiresAt = Date.now() + 8 * 3600 * 1000;
-        sessionStorage.setItem('praxis_admin_token', directToken);
-        sessionStorage.setItem('praxis_admin_expires', String(expiresAt));
-        localStorage.setItem('praxis_admin_token', directToken);
-        localStorage.setItem('praxis_admin_expires', String(expiresAt));
-        setIsAuthenticated(true);
-        setMasterPassword('');
-        showToast('Accès sécurisé accordé au SaaS Admin Praxis.', 'success');
-        return;
-      }
-
-      setShakeAuth(true);
-      setTimeout(() => setShakeAuth(false), 600);
-      setAuthError('Erreur de communication avec le serveur. Veuillez réessayer.');
+      setAuthError('Erreur de communication avec le serveur.');
     } finally {
       setAuthLoading(false);
     }
@@ -1985,31 +1912,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToApp }) =
                     </p>
                   </div>
                 </div>
-                <div className="flex flex-wrap items-center gap-2 shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      fetchDashboardData(false);
-                      showToast(`Actualisation depuis Supabase (${teachers.length} enseignants réels)...`, 'info');
-                    }}
-                    disabled={loadingData}
-                    className="px-3.5 py-2 rounded-xl text-xs font-semibold text-emerald-200 bg-emerald-950/60 hover:bg-emerald-900/60 border border-emerald-700/60 transition shadow-xs flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <RefreshCw className={`w-3.5 h-3.5 ${loadingData ? 'animate-spin' : ''}`} />
-                    <span>Re-synchroniser</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setDbUrlInput('https://chrtrfyynnbgxtysrzjo.supabase.co');
-                      setIsDbModalOpen(true);
-                    }}
-                    className="px-3.5 py-2 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 transition shadow-md flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <Database className="w-4 h-4" />
-                    <span>Paramètres Base Supabase</span>
-                  </button>
-                </div>
               </div>
             ) : (
               <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-950/40 to-slate-900 border border-amber-800/60 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-md">
@@ -2025,16 +1927,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToApp }) =
                       </span>
                     </h3>
                     <p className="text-xs text-slate-400 mt-0.5">
-                      Pour charger vos 387 enseignants réels de <span className="text-slate-200 font-medium">praxis-pro.pro</span>, connectez votre base Supabase en un clic.
+                      Pour charger vos 218 enseignants réels de <span className="text-slate-200 font-medium">praxis-pro.pro</span>, connectez votre base Supabase en un clic.
                     </p>
                   </div>
                 </div>
                 <button
                   type="button"
-                  onClick={() => {
-                    setDbUrlInput('https://chrtrfyynnbgxtysrzjo.supabase.co');
-                    setIsDbModalOpen(true);
-                  }}
+                  onClick={() => setIsDbModalOpen(true)}
                   className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-500 transition shadow-lg shadow-blue-600/30 flex items-center gap-2 shrink-0 cursor-pointer"
                 >
                   <Database className="w-4 h-4" />
@@ -2091,20 +1990,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToApp }) =
                     <option value="canceled">Résilié</option>
                   </select>
                 </div>
-
-                {/* Supabase Database Connection Button */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setDbUrlInput('https://chrtrfyynnbgxtysrzjo.supabase.co');
-                    setIsDbModalOpen(true);
-                  }}
-                  className="flex items-center gap-1.5 px-3 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-semibold rounded-xl shadow-md border border-emerald-400/30 transition-all cursor-pointer"
-                  title="Gérer la connexion Supabase Cloud (387 utilisateurs réels)"
-                >
-                  <Database className="w-3.5 h-3.5" />
-                  <span>Base Supabase ({teachers.length})</span>
-                </button>
 
                 {/* Export CSV Button */}
                 <button
@@ -3722,7 +3607,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToApp }) =
                 </div>
                 <div>
                   <h3 className="text-base font-bold text-white">Connexion Base de Données Supabase</h3>
-                  <p className="text-xs text-slate-400">Synchronisation temps réel de vos 387 vrais enseignants</p>
+                  <p className="text-xs text-slate-400">Synchronisation temps réel de vos 218 vrais enseignants</p>
                 </div>
               </div>
               <button
@@ -3737,10 +3622,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToApp }) =
             <div className="text-xs text-slate-300 bg-slate-900/80 p-3.5 rounded-xl border border-slate-800 space-y-2 leading-relaxed">
               <p className="font-semibold text-emerald-400 flex items-center gap-1.5">
                 <CheckCircle2 className="w-4 h-4 shrink-0" />
-                Garantie 100% Données Réelles Supabase ({teachers.length} enseignants détectés)
+                Garantie 0% de faux utilisateurs (Zéro Mock)
               </p>
               <p className="text-slate-400">
-                Vos 387 enseignants réels sont stockés dans votre base Supabase cloud (table <code className="text-emerald-300 font-mono">profiles</code> et <code className="text-emerald-300 font-mono">auth.users</code>). Le tableau de bord affiche directement leurs soldes de crédits (15 offerts), devoirs corrigés et dates réelles.
+                Vos 218 enseignants sont stockés dans votre base Supabase (table <code className="text-blue-300">profiles</code> de votre site <code className="text-blue-300">praxis-pro.pro</code>). En connectant vos identifiants ici, le tableau de bord interroge directement la base de données en direct avec leurs vraies dates et vraies copies.
               </p>
             </div>
 

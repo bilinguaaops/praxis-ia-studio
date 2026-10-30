@@ -25,7 +25,7 @@ export const ContactModal: React.FC<ContactModalProps> = ({ isOpen, onClose }) =
 
   const phoneNumber = '+225 0103890314';
   const rawPhone = '+2250103890314';
-  const emailAddress = 'praxis.edu0@gmail.com';
+  const emailAddress = 'agoussoukevin@gmail.com';
   const whatsappUrl = `https://wa.me/2250103890314?text=${encodeURIComponent(
     'Bonjour, je vous contacte au sujet de Praxis IA (logiciel de correction assistée).'
   )}`;

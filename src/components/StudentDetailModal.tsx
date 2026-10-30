@@ -40,8 +40,12 @@ import {
   exportRawHandwrittenCopy,
   getRotatedImageDataUrl,
   exportDirectStudentReportPdf,
+  exportDirectStudentReportPng,
 } from '../lib/exportUtils';
 import { CopyExportRenderer } from './CopyExportRenderer';
+import CorrectionMobileHeader from './correction/CorrectionMobileHeader';
+import CorrectionMobileActionBar from './correction/CorrectionMobileActionBar';
+import ExportSheet, { ExportFormat } from './correction/ExportSheet';
 
 interface StudentDetailModalProps {
   submission: StudentSubmission;
@@ -151,6 +155,7 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
   const [downloadStatusMessage, setDownloadStatusMessage] = useState('');
   const [showDownloadDropdown, setShowDownloadDropdown] = useState(false);
   const [showDownloadModal, setShowDownloadModal] = useState(false);
+  const [mobileExportSheetOpen, setMobileExportSheetOpen] = useState(false);
   const [exportFormat, setExportFormat] = useState<'pdf' | 'png' | 'pdf_a4' | 'raw_copy_png' | 'raw_copy_pdf'>('pdf');
   const [exportPageChoice, setExportPageChoice] = useState<'active' | 'all'>('active');
 
@@ -373,27 +378,49 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
           }
         }
 
-        // If capture didn't complete (or format is PDF and container wasn't available), use direct native vector PDF
+        // If capture didn't complete (or format is PDF and container wasn't available), use direct native vector PDF or Canvas PNG
         if (!captured) {
-          await exportDirectStudentReportPdf(
-            {
-              submission,
-              studentName,
-              grade,
-              gradeMax,
-              appreciation,
-              questions,
-              competences,
-              teacherNotes,
-              pages,
-              activePageIndex,
-              exportAllPages: pageChoice === 'all',
-              rotatedPages,
-              config,
-              isValidated,
-            },
-            `${baseFilename}.pdf`
-          );
+          if (format === 'png') {
+            await exportDirectStudentReportPng(
+              {
+                submission,
+                studentName,
+                grade,
+                gradeMax,
+                appreciation,
+                questions,
+                competences,
+                teacherNotes,
+                pages,
+                activePageIndex,
+                exportAllPages: pageChoice === 'all',
+                rotatedPages,
+                config,
+                isValidated,
+              },
+              `${baseFilename}.png`
+            );
+          } else {
+            await exportDirectStudentReportPdf(
+              {
+                submission,
+                studentName,
+                grade,
+                gradeMax,
+                appreciation,
+                questions,
+                competences,
+                teacherNotes,
+                pages,
+                activePageIndex,
+                exportAllPages: pageChoice === 'all',
+                rotatedPages,
+                config,
+                isValidated,
+              },
+              `${baseFilename}.pdf`
+            );
+          }
         }
       }
 
@@ -426,10 +453,18 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
             : 'w-full h-full sm:h-[92vh] max-w-7xl rounded-none sm:rounded-2xl shadow-2xl border-0 sm:border border-slate-200'
         }`}
       >
-        {/* Modal Header */}
+        {/* Mobile Header: Isolated for mobile screens (< 768px) */}
+        <CorrectionMobileHeader
+          title={studentName || `Copie n°${(submission.studentName || '1').replace(/\D/g, '') || '1'}`}
+          subtitle={`${config?.subject || 'Évaluation'} ${config?.className ? `– ${config.className}` : ''}`.trim()}
+          onBack={onClose}
+          onOpenMenu={() => setMobileExportSheetOpen(true)}
+        />
+
+        {/* Desktop Modal Header: Untouched for >= md screens */}
         <div
           onDoubleClick={toggleModalMaximize}
-          className={`bg-slate-900 text-white flex flex-wrap sm:flex-nowrap items-center justify-between border-b border-slate-800 shrink-0 select-none transition-all gap-2 ${
+          className={`hidden md:flex bg-slate-900 text-white flex-wrap sm:flex-nowrap items-center justify-between border-b border-slate-800 shrink-0 select-none transition-all gap-2 ${
             isModalMaximized ? 'px-4 py-2.5' : 'px-4 sm:px-6 py-3 sm:py-4'
           }`}
           title="Double-cliquer pour agrandir en grand écran ou réduire"
@@ -745,8 +780,36 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
           </div>
         </div>
 
-        {/* Mobile View Mode Switcher (Visible on < lg screens) */}
-        <div className="lg:hidden bg-slate-800 border-b border-slate-700 px-3 py-2 flex items-center justify-between text-xs font-bold shrink-0">
+        {/* Mobile View Mode Switcher (< md : 2 onglets pleine largeur faciles à toucher ; md à lg : vue 3 onglets) */}
+        <div className="md:hidden bg-slate-100 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 p-2 shrink-0">
+          <div className="grid grid-cols-2 gap-1.5 bg-slate-200/70 dark:bg-slate-950 p-1 rounded-xl">
+            <button
+              type="button"
+              onClick={() => setMobileTab('review')}
+              className={`flex items-center justify-center gap-1.5 h-11 rounded-lg text-sm font-semibold transition-all cursor-pointer ${
+                mobileTab === 'review'
+                  ? 'bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <span>Évaluation & Note</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setMobileTab('copy')}
+              className={`flex items-center justify-center gap-1.5 h-11 rounded-lg text-sm font-semibold transition-all cursor-pointer ${
+                mobileTab === 'copy'
+                  ? 'bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <span>Copie papier ({pages.length > 1 ? `${activePageIndex + 1}/${pages.length}` : '1 p.'})</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Tablet View Mode Switcher (Visible on md to lg screens only) */}
+        <div className="hidden md:flex lg:hidden bg-slate-800 border-b border-slate-700 px-3 py-2 items-center justify-between text-xs font-bold shrink-0">
           <span className="text-slate-300 text-[11px]">Affichage :</span>
           <div className="flex items-center gap-1 bg-slate-900 p-0.5 rounded-lg border border-slate-700/60">
             <button
@@ -859,7 +922,7 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
             </div>
 
             {/* Footer with page navigation and Fullscreen button */}
-            <div className="px-4 py-2 bg-slate-950/90 border-t border-slate-800 text-[11px] text-slate-400 flex flex-wrap items-center justify-between gap-2">
+            <div className="px-4 py-2 pb-20 md:pb-2 bg-slate-950/90 border-t border-slate-800 text-[11px] text-slate-400 flex flex-wrap items-center justify-between gap-2">
               {pages.length > 1 ? (
                 <div className="flex items-center gap-1.5">
                   <button
@@ -940,7 +1003,7 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
               mobileTab === 'copy' ? 'hidden lg:block' : 'block'
             } ${
               mobileTab === 'split' ? 'h-[55vh]' : 'h-full'
-            } lg:h-full bg-slate-50 overflow-y-auto ${
+            } lg:h-full bg-slate-50 overflow-y-auto pb-28 md:pb-6 ${
               compactNoScroll ? 'p-3 sm:p-4 space-y-3 text-xs' : 'p-3.5 sm:p-6 space-y-4 sm:space-y-6'
             }`}
           >
@@ -1089,7 +1152,7 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 self-stretch sm:self-center justify-end shrink-0">
+                <div className="hidden md:flex items-center gap-2 self-stretch sm:self-center justify-end shrink-0">
                   {statutValidation === 'valide_professeur' ? (
                     <button
                       type="button"
@@ -1424,9 +1487,9 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
           </div>
         </div>
 
-        {/* Modal Footer */}
+        {/* Modal Footer (Desktop only: hidden md:flex) */}
         <div
-          className={`bg-white border-t border-slate-200 flex items-center justify-between shrink-0 flex-wrap gap-2 transition-all ${
+          className={`hidden md:flex bg-white border-t border-slate-200 items-center justify-between shrink-0 flex-wrap gap-2 transition-all ${
             compactNoScroll ? 'px-4 py-2' : 'px-6 py-3.5'
           }`}
         >
@@ -1490,6 +1553,42 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
             </button>
           </div>
         </div>
+
+        {/* Mobile Action Bar: Fixed 2-button footer on mobile */}
+        <CorrectionMobileActionBar
+          validated={statutValidation === 'valide_professeur' || isValidated}
+          busy={isDownloading}
+          onValidate={() => {
+            const now = new Date().toISOString();
+            const prof = teacherName || 'Professeur';
+            setStatutValidation('valide_professeur');
+            setValidePar(prof);
+            setValideLe(now);
+            handleSaveWithValidation('valide_professeur', prof, now);
+          }}
+          onDownload={() => setMobileExportSheetOpen(true)}
+        />
+
+        {/* Mobile Export & Options Sheet */}
+        <ExportSheet
+          open={mobileExportSheetOpen}
+          onClose={() => setMobileExportSheetOpen(false)}
+          onExport={(format: ExportFormat) => {
+            if (format === 'pdf') {
+              handleDownload('pdf');
+            } else if (format === 'png') {
+              handleDownload('png');
+            } else if (format === 'pdf-paginated') {
+              handleDownload('pdf_a4');
+            }
+          }}
+          onSave={handleSaveChanges}
+          onSwap={
+            onSwapSubmissions && allSubmissions.length > 1
+              ? () => setShowSwapDropdown(true)
+              : undefined
+          }
+        />
       </div>
 
       {/* Fullscreen Reader Mode: Allows the teacher to inspect sheets across the entire screen */}
