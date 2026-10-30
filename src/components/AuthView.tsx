@@ -523,8 +523,12 @@ export const AuthView: React.FC<AuthViewProps> = ({
         }
       }
 
+      const targetOrigin = window.location.origin.includes('localhost')
+        ? 'https://praxis-pro.pro'
+        : window.location.origin;
+
       const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
-        redirectTo: `${window.location.origin}/reset-password`,
+        redirectTo: `${targetOrigin}/reset-password`,
       });
 
       if (error) {

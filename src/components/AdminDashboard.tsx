@@ -136,6 +136,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToApp }) =
   const [selectedTeacherForRefund, setSelectedTeacherForRefund] = useState<TeacherAccount | null>(null);
   const [selectedTeacherForEmail, setSelectedTeacherForEmail] = useState<TeacherAccount | null>(null);
   const [selectedTeacherForDelete, setSelectedTeacherForDelete] = useState<TeacherAccount | null>(null);
+  const [selectedTeacherForPasswordReset, setSelectedTeacherForPasswordReset] = useState<TeacherAccount | null>(null);
+  const [directResetLinkResult, setDirectResetLinkResult] = useState<{ link: string; email: string; otp?: string } | null>(null);
+  const [manualNewPassword, setManualNewPassword] = useState('');
+  const [isResettingPassword, setIsResettingPassword] = useState(false);
   const [isAddTeacherOpen, setIsAddTeacherOpen] = useState(false);
 
   // Live Database (Supabase) Connection state
@@ -856,6 +860,57 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToApp }) =
       fetchDashboardData();
     } catch (err: any) {
       showToast(err.message, 'error');
+    }
+  };
+
+  // Password Reset / Direct Recovery Link generator
+  const handleGenerateDirectResetLink = async (teacher: TeacherAccount) => {
+    setIsResettingPassword(true);
+    try {
+      const res = await fetch(`/api/admin/teachers/${teacher.id}/reset-password`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-token': getAdminToken(),
+        },
+        body: JSON.stringify({ action: 'generate_link' }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erreur lors de la génération du lien');
+      setDirectResetLinkResult({ link: data.directResetLink, email: data.email, otp: data.otpCode });
+      showToast('Lien de réinitialisation direct généré avec succès !', 'success');
+    } catch (err: any) {
+      showToast(err.message, 'error');
+    } finally {
+      setIsResettingPassword(false);
+    }
+  };
+
+  const handleSetManualPassword = async (teacher: TeacherAccount) => {
+    if (!manualNewPassword || manualNewPassword.length < 6) {
+      showToast('Le mot de passe doit comporter au moins 6 caractères.', 'error');
+      return;
+    }
+    setIsResettingPassword(true);
+    try {
+      const res = await fetch(`/api/admin/teachers/${teacher.id}/reset-password`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-token': getAdminToken(),
+        },
+        body: JSON.stringify({ action: 'set_password', newPassword: manualNewPassword }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erreur de mise à jour');
+      showToast(data.message || 'Mot de passe mis à jour !', 'success');
+      setSelectedTeacherForPasswordReset(null);
+      setManualNewPassword('');
+      setDirectResetLinkResult(null);
+    } catch (err: any) {
+      showToast(err.message, 'error');
+    } finally {
+      setIsResettingPassword(false);
     }
   };
 
@@ -2179,6 +2234,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToApp }) =
                                 <Send className="w-4 h-4" />
                               </button>
 
+                              {/* Password Reset / Direct Link */}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedTeacherForPasswordReset(teacher);
+                                  setDirectResetLinkResult(null);
+                                  setManualNewPassword('');
+                                }}
+                                className="p-1.5 text-slate-400 hover:text-amber-400 hover:bg-slate-700/60 rounded-lg transition-colors cursor-pointer"
+                                title="Réinitialiser le mot de passe / Lien direct"
+                              >
+                                <KeyRound className="w-4 h-4" />
+                              </button>
+
                               {/* Refund (if paid) */}
                               {['monthly', 'annual', 'institution'].includes(teacher.plan) && (
                                 <button
@@ -3191,7 +3260,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToApp }) =
               </div>
             </div>
 
-            <div className="flex justify-end gap-2 pt-2">
+            <div className="flex justify-between items-center pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  const teacher = selectedTeacherForDetail;
+                  setSelectedTeacherForDetail(null);
+                  setSelectedTeacherForPasswordReset(teacher);
+                  setDirectResetLinkResult(null);
+                  setManualNewPassword('');
+                }}
+                className="px-3 py-2 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-semibold rounded-xl flex items-center gap-1.5 cursor-pointer"
+              >
+                <KeyRound className="w-3.5 h-3.5" />
+                Réinitialiser mot de passe / Lien direct
+              </button>
               <button
                 type="button"
                 onClick={() => setSelectedTeacherForDetail(null)}
@@ -3457,6 +3540,140 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToApp }) =
                 className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold rounded-xl shadow-md"
               >
                 Supprimer définitivement
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* MODAL: RESET PASSWORD & DIRECT RECOVERY LINK */}
+      {/* ========================================================= */}
+      {selectedTeacherForPasswordReset && (
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-[#141C2E] border border-slate-800 rounded-2xl w-full max-w-lg p-6 shadow-2xl space-y-5 animate-scale-in">
+            <div className="flex items-start justify-between pb-3 border-b border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center">
+                  <KeyRound className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">Gestion du mot de passe</h3>
+                  <p className="text-xs text-slate-400">
+                    Pour <strong className="text-white">{selectedTeacherForPasswordReset.name}</strong> ({selectedTeacherForPasswordReset.email})
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedTeacherForPasswordReset(null);
+                  setDirectResetLinkResult(null);
+                  setManualNewPassword('');
+                }}
+                className="text-slate-400 hover:text-white p-1 rounded-lg"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Option 1: Direct Recovery Link */}
+            <div className="bg-[#0B0F17] p-4 rounded-xl border border-slate-800 space-y-3">
+              <div>
+                <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                  Option 1 : Générer un lien direct (Sans passer par localhost)
+                </h4>
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  Idéal à envoyer sur WhatsApp : l'enseignant clique et arrive directement sur la page de saisie d'un nouveau mot de passe.
+                </p>
+              </div>
+
+              {!directResetLinkResult ? (
+                <button
+                  type="button"
+                  disabled={isResettingPassword}
+                  onClick={() => handleGenerateDirectResetLink(selectedTeacherForPasswordReset)}
+                  className="w-full py-2.5 px-3 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-lg transition-colors flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                >
+                  <KeyRound className="w-4 h-4" />
+                  {isResettingPassword ? 'Génération en cours...' : 'Générer le lien direct en 1 clic'}
+                </button>
+              ) : (
+                <div className="space-y-2 pt-1">
+                  <div className="p-2.5 bg-slate-900 border border-amber-500/40 rounded-lg text-xs font-mono text-amber-300 break-all select-all">
+                    {directResetLinkResult.link}
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(directResetLinkResult.link);
+                        showToast('Lien direct copié dans le presse-papier !', 'success');
+                      }}
+                      className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs rounded-lg flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      Copier le lien direct
+                    </button>
+                    <a
+                      href={directResetLinkResult.link}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs rounded-lg flex items-center justify-center gap-1"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                      Tester
+                    </a>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Option 2: Set Password directly */}
+            <div className="bg-[#0B0F17] p-4 rounded-xl border border-slate-800 space-y-3">
+              <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
+                <ShieldCheck className="w-3.5 h-3.5 text-blue-400" />
+                Option 2 : Définir un mot de passe immédiatement
+              </h4>
+              <p className="text-[11px] text-slate-400">
+                Définissez directement le mot de passe dans Supabase. L'enseignant pourra se connecter sur-le-champ.
+              </p>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="Nouveau mot de passe (min 6 car.)"
+                  value={manualNewPassword}
+                  onChange={(e) => setManualNewPassword(e.target.value)}
+                  className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-hidden focus:border-blue-500 font-mono"
+                />
+                <button
+                  type="button"
+                  disabled={isResettingPassword || !manualNewPassword}
+                  onClick={() => handleSetManualPassword(selectedTeacherForPasswordReset)}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs rounded-lg cursor-pointer disabled:opacity-50 transition-colors"
+                >
+                  Appliquer
+                </button>
+              </div>
+            </div>
+
+            {/* Notice Supabase URL Configuration */}
+            <div className="bg-blue-950/40 border border-blue-800/40 rounded-xl p-3 text-[11px] text-blue-300 leading-relaxed">
+              💡 <strong>Pour que les emails automatiques fonctionnent :</strong> Dans Supabase (<code className="text-white">Authentication &gt; URL Configuration</code>), remplacez <code className="text-amber-300">Site URL = http://localhost:3000</code> par <code className="text-emerald-400">https://praxis-pro.pro</code>.
+            </div>
+
+            <div className="flex justify-end pt-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedTeacherForPasswordReset(null);
+                  setDirectResetLinkResult(null);
+                  setManualNewPassword('');
+                }}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl"
+              >
+                Fermer
               </button>
             </div>
           </div>

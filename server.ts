@@ -5372,6 +5372,87 @@ app.post('/api/admin/teachers/:id/send-email', requireAdminAuth, (req, res) => {
   });
 });
 
+// Protected: Admin Password Reset & Direct Recovery Link Generator
+app.post('/api/admin/teachers/:id/reset-password', requireAdminAuth, async (req, res) => {
+  const { id } = req.params;
+  const { action, newPassword } = req.body; // action: 'generate_link' | 'set_password'
+
+  const leads = loadLeads();
+  const teacher = leads.find((l) => l.id === id);
+  const email = (teacher?.email || '').trim().toLowerCase();
+
+  if (!teacher || !email) {
+    return res.status(404).json({ error: 'Enseignant ou adresse email non trouvé.' });
+  }
+
+  const supabase = getSupabaseServerClient();
+  if (!supabase) {
+    return res.status(500).json({ error: 'Base Supabase non connectée côté serveur.' });
+  }
+
+  try {
+    // 1. Définition manuelle directe d'un mot de passe par l'administrateur
+    if (action === 'set_password') {
+      if (!newPassword || newPassword.length < 6) {
+        return res.status(400).json({ error: 'Le mot de passe doit comporter au moins 6 caractères.' });
+      }
+
+      const { data: updateData, error: updateErr } = await supabase.auth.admin.updateUserById(id, {
+        password: newPassword,
+      });
+
+      if (updateErr) {
+        return res.status(400).json({ error: `Erreur Supabase: ${updateErr.message}` });
+      }
+
+      return res.json({
+        success: true,
+        message: `Mot de passe mis à jour avec succès pour ${email}. L'enseignant peut désormais se connecter avec ce nouveau mot de passe.`,
+      });
+    }
+
+    // 2. Génération d'un lien direct de réinitialisation (contournant localhost:3000)
+    const hostOrigin = (req.headers['origin'] || req.headers['referer'] || 'https://praxis-pro.pro').toString().replace(/\/$/, '');
+    const cleanOrigin = hostOrigin.includes('localhost') ? 'https://praxis-pro.pro' : hostOrigin;
+
+    const { data: linkData, error: linkErr } = await supabase.auth.admin.generateLink({
+      type: 'recovery',
+      email,
+    });
+
+    if (linkErr || !linkData?.properties?.action_link) {
+      return res.status(400).json({ error: linkErr?.message || 'Impossible de générer le lien de récupération.' });
+    }
+
+    const actionLink = linkData.properties.action_link;
+    let directResetLink = actionLink;
+
+    // Résolution serveur du jeton pour obtenir directement les tokens d'accès sans passer par localhost:3000
+    try {
+      const verifyRes = await fetch(actionLink, { redirect: 'manual' });
+      const location = verifyRes.headers.get('location');
+      if (location && location.includes('#')) {
+        const hash = location.substring(location.indexOf('#'));
+        directResetLink = `${cleanOrigin}/${hash}`;
+      }
+    } catch (_resErr) {
+      // Fallback si la résolution directe échoue
+      directResetLink = actionLink;
+    }
+
+    return res.json({
+      success: true,
+      email,
+      directResetLink,
+      otpCode: linkData.properties.email_otp,
+      message: `Lien de réinitialisation direct généré avec succès pour ${email}.`,
+    });
+  } catch (err: any) {
+    console.error('[Admin Reset Password] Exception:', err);
+    return res.status(500).json({ error: err.message || 'Erreur interne lors de la réinitialisation.' });
+  }
+});
+
 // Protected: Delete teacher with confirmation
 app.delete('/api/admin/teachers/:id', requireAdminAuth, (req, res) => {
   const { id } = req.params;
