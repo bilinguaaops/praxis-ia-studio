@@ -53,12 +53,6 @@ export const VideoTutorialSection: React.FC<VideoTutorialSectionProps> = ({
   const [activeChapter, setActiveChapter] = useState(0);
   const [loading, setLoading] = useState(true);
 
-  // Quick edit mode (for admin convenience directly in UI)
-  const [isEditingUrl, setIsEditingUrl] = useState(false);
-  const [urlInput, setUrlInput] = useState('');
-  const [titleInput, setTitleInput] = useState('');
-  const [savingNotice, setSavingNotice] = useState(false);
-
   // Fetch tutorials from API
   const fetchTutorials = async () => {
     try {
@@ -155,62 +149,6 @@ export const VideoTutorialSection: React.FC<VideoTutorialSectionProps> = ({
     return { url: clean, type: 'direct' };
   };
 
-  const handleSaveVideoUrl = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!urlInput.trim()) return;
-
-    const { url: embedUrl, type: detectedType } = normalizeVideoUrl(urlInput);
-    const token = sessionStorage.getItem('praxis_admin_token') || localStorage.getItem('praxis_admin_token') || '2345';
-
-    try {
-      setSavingNotice(true);
-      const res = await fetch('/api/admin/tutorials', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-admin-token': token,
-        },
-        body: JSON.stringify({
-          id: currentTutorial?.id,
-          title: titleInput.trim() || currentTutorial?.title || 'Tutoriel Praxis Pro',
-          description: currentTutorial?.description || '',
-          videoUrl: embedUrl,
-          videoType: detectedType,
-          duration: currentTutorial?.duration || '03:00',
-          category: currentTutorial?.category || 'Prise en main',
-          isFeatured: true,
-          chapters: currentTutorial?.chapters || [],
-        }),
-      });
-
-      if (res.ok) {
-        await fetchTutorials();
-        setIsEditingUrl(false);
-      } else {
-        // Local state update
-        setTutorials((prev) =>
-          prev.map((t, idx) =>
-            idx === selectedTutorialIndex
-              ? { ...t, videoUrl: embedUrl, videoType: detectedType as any }
-              : t
-          )
-        );
-        setIsEditingUrl(false);
-      }
-    } catch {
-      setTutorials((prev) =>
-        prev.map((t, idx) =>
-          idx === selectedTutorialIndex
-            ? { ...t, videoUrl: embedUrl, videoType: detectedType as any }
-            : t
-        )
-      );
-      setIsEditingUrl(false);
-    } finally {
-      setSavingNotice(false);
-    }
-  };
-
   const isDirectVideo =
     currentTutorial?.videoType === 'direct' ||
     currentTutorial?.videoUrl?.startsWith('/videos/') ||
@@ -242,21 +180,6 @@ export const VideoTutorialSection: React.FC<VideoTutorialSectionProps> = ({
           </div>
 
           <div className="flex items-center gap-2.5 shrink-0">
-            {/* Bouton pour que l'admin puisse changer la vidéo en 1 clic */}
-            <button
-              type="button"
-              onClick={() => {
-                setUrlInput(currentTutorial?.videoUrl || '');
-                setTitleInput(currentTutorial?.title || '');
-                setIsEditingUrl(!isEditingUrl);
-              }}
-              className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 active:bg-slate-750 text-slate-300 text-xs font-bold rounded-xl border border-slate-700 transition flex items-center gap-1.5 cursor-pointer shadow-xs"
-              title="Modifier l'URL YouTube / Cloudinary / MP4 de la vidéo"
-            >
-              <Edit3 className="w-3.5 h-3.5 text-blue-400" />
-              <span>Changer la vidéo</span>
-            </button>
-
             {onStartCorrection && (
               <button
                 type="button"
@@ -290,67 +213,6 @@ export const VideoTutorialSection: React.FC<VideoTutorialSectionProps> = ({
               </button>
             ))}
           </div>
-        )}
-
-        {/* Quick URL Edit Form (Admin or local testing) */}
-        {isEditingUrl && (
-          <form
-            onSubmit={handleSaveVideoUrl}
-            className="p-4.5 bg-slate-850/95 border-2 border-blue-500/50 rounded-2xl space-y-3.5 animate-in fade-in shadow-xl"
-          >
-            <div className="flex items-center justify-between border-b border-slate-700/80 pb-2">
-              <label className="text-xs font-black text-white flex items-center gap-2">
-                <Video className="w-4 h-4 text-blue-400" />
-                <span>Intégrer votre vidéo personnalisée (YouTube, Cloudinary, Loom, MP4) :</span>
-              </label>
-              <button
-                type="button"
-                onClick={() => setIsEditingUrl(false)}
-                className="text-xs text-slate-400 hover:text-white cursor-pointer px-2 py-0.5"
-              >
-                Fermer ✕
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div>
-                <span className="text-[11px] font-bold text-slate-300 block mb-1">Titre de la vidéo :</span>
-                <input
-                  type="text"
-                  value={titleInput}
-                  onChange={(e) => setTitleInput(e.target.value)}
-                  placeholder="Ex: Démonstration complète Praxis Pro..."
-                  className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-hidden focus:border-blue-500"
-                />
-              </div>
-
-              <div>
-                <span className="text-[11px] font-bold text-slate-300 block mb-1">Lien de la vidéo (URL) :</span>
-                <input
-                  type="text"
-                  value={urlInput}
-                  onChange={(e) => setUrlInput(e.target.value)}
-                  placeholder="Ex: https://www.youtube.com/watch?v=... ou https://res.cloudinary.com/.../video.mp4"
-                  className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-hidden focus:border-blue-500"
-                  required
-                />
-              </div>
-            </div>
-
-            <div className="flex flex-wrap items-center justify-between gap-2 pt-1 text-[11px] text-slate-400">
-              <span className="leading-snug">
-                ✅ Compatible : <strong>YouTube</strong> (standard, shorts, embed), <strong>Cloudinary</strong>, <strong>Loom</strong>, ou lien direct <strong>.mp4 / .webm</strong>.
-              </span>
-              <button
-                type="submit"
-                disabled={savingNotice}
-                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl transition cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
-              >
-                {savingNotice ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-                <span>Enregistrer & Publier</span>
-              </button>
-            </div>
-          </form>
         )}
 
         {/* Video Player & Chapters Grid */}
