@@ -611,22 +611,22 @@ export const FaqView: React.FC<FaqViewProps> = ({ onStartCorrection, onOpenConta
                 <Phone className="w-4 h-4" />
               </div>
               <div>
-                <span className="text-[10px] text-blue-200 block uppercase font-bold tracking-wider">Téléphone & WhatsApp</span>
-                <span className="font-mono font-bold text-sm text-white">+225 0103890314</span>
+                <span className="text-[10px] text-blue-200 block uppercase font-bold tracking-wider">Téléphone &amp; WhatsApp Pro</span>
+                <span className="font-mono font-bold text-sm text-white">07 67 26 58 02</span>
               </div>
             </div>
             <div className="flex items-center gap-1.5">
               <a
-                href="https://wa.me/2250103890314"
+                href="https://wa.me/33767265802"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-[11px] transition-colors"
-                title="Écrire sur WhatsApp"
+                title="Écrire sur WhatsApp au support"
               >
                 WhatsApp
               </a>
               <a
-                href="tel:+2250103890314"
+                href="tel:+33767265802"
                 className="px-2.5 py-1 bg-white/15 hover:bg-white/25 text-white rounded-lg font-bold text-[11px] transition-colors"
                 title="Appeler directement"
               >
@@ -642,13 +642,13 @@ export const FaqView: React.FC<FaqViewProps> = ({ onStartCorrection, onOpenConta
               </div>
               <div className="truncate">
                 <span className="text-[10px] text-blue-200 block uppercase font-bold tracking-wider">Email support</span>
-                <span className="font-mono font-bold text-sm text-white truncate block">agoussoukevin@gmail.com</span>
+                <span className="font-mono font-bold text-sm text-white truncate block">praxis.edu0@gmail.com</span>
               </div>
             </div>
             <a
-              href="mailto:agoussoukevin@gmail.com?subject=Contact%20Praxis%20IA"
+              href="mailto:praxis.edu0@gmail.com?subject=Contact%20Praxis%20Pro"
               className="px-2.5 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold text-[11px] transition-colors shrink-0"
-              title="Envoyer un e-mail"
+              title="Envoyer un email au support"
             >
               Écrire
             </a>

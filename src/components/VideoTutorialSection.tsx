@@ -551,14 +551,14 @@ export const VideoTutorialSection: React.FC<VideoTutorialSectionProps> = ({
                 Un doute sur une copie difficile ou besoin d'assistance en direct ?
               </h4>
               <p className="text-xs text-slate-400">
-                Contactez notre équipe pédagogique par WhatsApp au <strong>+225 0103890314</strong> ou par e-mail à <span className="text-blue-300 font-medium">praxis.edu0@gmail.com</span>.
+                Contactez notre équipe pédagogique par WhatsApp au <strong>07 67 26 58 02</strong> ou par e-mail à <span className="text-blue-300 font-medium">praxis.edu0@gmail.com</span>.
               </p>
             </div>
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
             <a
-              href="https://wa.me/2250103890314?text=Bonjour%2C%20j%27ai%20besoin%20d%27aide%20sur%20le%20fonctionnement%20de%20Praxis%20Pro"
+              href="https://wa.me/33767265802?text=Bonjour%2C%20j%27ai%20besoin%20d%27aide%20sur%20le%20fonctionnement%20de%20Praxis%20Pro"
               target="_blank"
               rel="noopener noreferrer"
               className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition flex items-center gap-1.5 shadow-xs"
