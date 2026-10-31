@@ -612,12 +612,12 @@ export const FaqView: React.FC<FaqViewProps> = ({ onStartCorrection, onOpenConta
               </div>
               <div>
                 <span className="text-[10px] text-blue-200 block uppercase font-bold tracking-wider">Téléphone &amp; WhatsApp Pro</span>
-                <span className="font-mono font-bold text-sm text-white">07 67 26 58 02</span>
+                <span className="font-mono font-bold text-sm text-white">+225 07 67 26 58 02</span>
               </div>
             </div>
             <div className="flex items-center gap-1.5">
               <a
-                href="https://wa.me/33767265802"
+                href="https://wa.me/2250767265802"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-[11px] transition-colors"
@@ -626,7 +626,7 @@ export const FaqView: React.FC<FaqViewProps> = ({ onStartCorrection, onOpenConta
                 WhatsApp
               </a>
               <a
-                href="tel:+33767265802"
+                href="tel:+2250767265802"
                 className="px-2.5 py-1 bg-white/15 hover:bg-white/25 text-white rounded-lg font-bold text-[11px] transition-colors"
                 title="Appeler directement"
               >

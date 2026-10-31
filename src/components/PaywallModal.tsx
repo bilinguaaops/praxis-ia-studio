@@ -1474,7 +1474,7 @@ export const PaywallModal: React.FC<PaywallModalProps> = ({
                 </span>
                 <span className="flex items-center gap-1 text-slate-500">
                   <Phone className="w-3 h-3 text-blue-600" />
-                  Support direct : 07 67 26 58 02
+                  Support direct : +225 07 67 26 58 02
                 </span>
               </div>
             </form>

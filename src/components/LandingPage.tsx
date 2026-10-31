@@ -1115,7 +1115,7 @@ Donc BD = (OB * AC) / OA = (4.5 * 6) / 3 = 9 cm."`,
                       Téléphone & WhatsApp Direct
                     </span>
                     <h3 className="text-xl font-extrabold text-slate-900 font-mono">
-                      07 67 26 58 02
+                      +225 07 67 26 58 02
                     </h3>
                   </div>
                 </div>
@@ -1126,7 +1126,7 @@ Donc BD = (OB * AC) / OA = (4.5 * 6) / 3 = 9 cm."`,
 
               <div className="grid grid-cols-2 gap-2.5 pt-2">
                 <a
-                  href="https://wa.me/33767265802?text=Bonjour%20je%20vous%20contacte%20concernant%20Praxis%20Pro"
+                  href="https://wa.me/2250767265802?text=Bonjour%20je%20vous%20contacte%20concernant%20Praxis%20Pro"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition-colors shadow-xs"
@@ -1135,7 +1135,7 @@ Donc BD = (OB * AC) / OA = (4.5 * 6) / 3 = 9 cm."`,
                   <span>WhatsApp</span>
                 </a>
                 <a
-                  href="tel:+33767265802"
+                  href="tel:+2250767265802"
                   className="flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs transition-colors shadow-xs"
                 >
                   <Phone className="w-4 h-4" />
@@ -1222,14 +1222,14 @@ Donc BD = (OB * AC) / OA = (4.5 * 6) / 3 = 9 cm."`,
             {/* Direct Contact Badges in Footer */}
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 text-xs">
               <a
-                href="tel:+33767265802"
+                href="tel:+2250767265802"
                 className="flex items-center gap-2 text-slate-700 hover:text-emerald-700 transition-colors font-medium"
                 title="Appeler le support direct"
               >
                 <div className="w-6 h-6 rounded-md bg-emerald-50 text-emerald-600 flex items-center justify-center">
                   <Phone className="w-3.5 h-3.5" />
                 </div>
-                <span>07 67 26 58 02</span>
+                <span>+225 07 67 26 58 02</span>
               </a>
 
               <a

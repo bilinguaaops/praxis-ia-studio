@@ -23,10 +23,10 @@ export const ContactModal: React.FC<ContactModalProps> = ({ isOpen, onClose }) =
 
   if (!isOpen) return null;
 
-  const phoneNumber = '07 67 26 58 02';
-  const rawPhone = '+33767265802';
+  const phoneNumber = '+225 07 67 26 58 02';
+  const rawPhone = '+2250767265802';
   const emailAddress = 'praxis.edu0@gmail.com';
-  const whatsappUrl = `https://wa.me/33767265802?text=${encodeURIComponent(
+  const whatsappUrl = `https://wa.me/2250767265802?text=${encodeURIComponent(
     'Bonjour, je vous contacte au sujet de Praxis Pro (logiciel de correction assistée).'
   )}`;
 
