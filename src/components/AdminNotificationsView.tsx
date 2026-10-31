@@ -15,8 +15,10 @@ import {
   Plus,
   Radio,
   Clock,
+  Smartphone,
 } from 'lucide-react';
 import { BroadcastNotification } from '../types';
+import { AdminPushManager } from './AdminPushManager';
 
 interface AdminNotificationsViewProps {
   onNotify?: (text: string, type: 'success' | 'error' | 'info') => void;
@@ -30,6 +32,7 @@ export const AdminNotificationsView: React.FC<AdminNotificationsViewProps> = ({
   const [notifications, setNotifications] = useState<BroadcastNotification[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [channelMode, setChannelMode] = useState<'push' | 'in_app'>('push');
 
   // Form state
   const [title, setTitle] = useState('');
@@ -188,7 +191,51 @@ export const AdminNotificationsView: React.FC<AdminNotificationsViewProps> = ({
         </button>
       </div>
 
-      {/* KPI Stats */}
+      {/* Channel Switcher: Push Mobile vs Cloche In-App */}
+      <div className="flex flex-wrap items-center gap-2 p-1.5 bg-[#141C2E] border border-slate-800 rounded-2xl w-fit">
+        <button
+          type="button"
+          onClick={() => setChannelMode('push')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            channelMode === 'push'
+              ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30'
+              : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+          }`}
+        >
+          <Smartphone className="w-4 h-4" />
+          <span>Notifications Push Smartphones &amp; Écrans</span>
+          <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-blue-950 text-blue-300 border border-blue-700/50">
+            Nouveau
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setChannelMode('in_app')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            channelMode === 'in_app'
+              ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30'
+              : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+          }`}
+        >
+          <Bell className="w-4 h-4" />
+          <span>Annonces Cloche In-App</span>
+          <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-slate-800 text-slate-300">
+            {activeCount} active{activeCount > 1 ? 's' : ''}
+          </span>
+        </button>
+      </div>
+
+      {/* VIEW A: PUSH NOTIFICATIONS MANAGER */}
+      {channelMode === 'push' && (
+        <div className="animate-fade-in">
+          <AdminPushManager adminToken={getEffectiveToken()} onNotify={onNotify} />
+        </div>
+      )}
+
+      {/* VIEW B: IN-APP BROADCAST ANNOUNCEMENTS (CLOCHE) */}
+      {channelMode === 'in_app' && (
+        <div className="space-y-6 animate-fade-in">
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="bg-[#141C2E] border border-slate-800 p-4 rounded-xl flex items-center gap-3">
           <div className="w-10 h-10 rounded-lg bg-blue-600/10 border border-blue-500/20 text-blue-400 flex items-center justify-center">
@@ -532,6 +579,8 @@ export const AdminNotificationsView: React.FC<AdminNotificationsViewProps> = ({
           </div>
         )}
       </div>
+        </div>
+      )}
     </div>
   );
 };

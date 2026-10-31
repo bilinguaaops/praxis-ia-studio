@@ -9,3 +9,4 @@ coverage/
 .aistudio/
 public/assets/
 handle_new_user_BACKUP.sql
+push_subscriptions.json

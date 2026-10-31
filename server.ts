@@ -8,6 +8,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { createClient } from '@supabase/supabase-js';
 import WebSocket from 'ws';
 import { createServer as createViteServer } from 'vite';
+import webpush from 'web-push';
 
 // Ensure globalThis.WebSocket exists on all Node.js versions (including Node 18/20 on Render)
 if (!globalThis.WebSocket) {
@@ -829,6 +830,124 @@ function saveNotifications(notifications: BroadcastNotification[]) {
     atomicWriteJsonSync(NOTIFICATIONS_FILE, notifications);
   } catch (err) {
     console.error('[Notifications] Erreur enregistrement notifications.json :', err);
+  }
+}
+
+// --- Web Push Notifications Storage & VAPID ---
+const VAPID_KEYS_FILE = path.join(process.cwd(), 'vapid_keys.json');
+const PUSH_SUBS_FILE = path.join(process.cwd(), 'push_subscriptions.json');
+
+export interface PushSubscriptionRecord {
+  endpoint: string;
+  keys: {
+    p256dh: string;
+    auth: string;
+  };
+  userEmail?: string;
+  userName?: string;
+  userAgent?: string;
+  subscribedAt: string;
+}
+
+function getVapidKeys(): { publicKey: string; privateKey: string } {
+  try {
+    if (fs.existsSync(VAPID_KEYS_FILE)) {
+      const data = fs.readFileSync(VAPID_KEYS_FILE, 'utf-8');
+      const parsed = JSON.parse(data);
+      if (parsed.publicKey && parsed.privateKey) {
+        return parsed;
+      }
+    }
+  } catch (err) {
+    console.warn('[Push] Génération de nouvelles clés VAPID...');
+  }
+  const newKeys = webpush.generateVAPIDKeys();
+  try {
+    atomicWriteJsonSync(VAPID_KEYS_FILE, newKeys);
+  } catch {}
+  return newKeys;
+}
+
+const vapidKeys = getVapidKeys();
+try {
+  webpush.setVapidDetails(
+    'mailto:support@praxis-pro.pro',
+    vapidKeys.publicKey,
+    vapidKeys.privateKey
+  );
+  console.log('[WebPush] Service VAPID initialisé avec succès.');
+} catch (vapidErr) {
+  console.warn('[WebPush] Avertissement initialisation VAPID :', vapidErr);
+}
+
+function loadPushSubscriptions(): PushSubscriptionRecord[] {
+  try {
+    if (fs.existsSync(PUSH_SUBS_FILE)) {
+      const data = fs.readFileSync(PUSH_SUBS_FILE, 'utf-8');
+      const parsed = JSON.parse(data);
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch (err) {
+    console.warn('[Push] Erreur lecture push_subscriptions.json :', err);
+  }
+  return [];
+}
+
+function savePushSubscriptions(subs: PushSubscriptionRecord[]) {
+  try {
+    atomicWriteJsonSync(PUSH_SUBS_FILE, subs);
+  } catch (err) {
+    console.error('[Push] Erreur enregistrement push_subscriptions.json :', err);
+  }
+}
+
+async function sendPushNotification(
+  sub: PushSubscriptionRecord,
+  payload: { title: string; body: string; url?: string; tag?: string }
+): Promise<boolean> {
+  try {
+    const pushPayload = JSON.stringify({
+      title: payload.title,
+      body: payload.body,
+      icon: '/icon-192.png',
+      badge: '/favicon-32x32.png',
+      url: payload.url || '/',
+      tag: payload.tag || `praxis-${Date.now()}`,
+    });
+
+    await webpush.sendNotification(
+      {
+        endpoint: sub.endpoint,
+        keys: sub.keys,
+      },
+      pushPayload
+    );
+    return true;
+  } catch (err: any) {
+    // 410 Gone ou 404 Not Found = abonnement expiré / révoqué
+    if (err.statusCode === 410 || err.statusCode === 404) {
+      console.log(`[WebPush] Abonnement expiré supprimé : ${sub.endpoint.slice(0, 30)}...`);
+      const current = loadPushSubscriptions();
+      savePushSubscriptions(current.filter((s) => s.endpoint !== sub.endpoint));
+    } else {
+      console.warn('[WebPush] Erreur lors de l’envoi push :', err.message || err);
+    }
+    return false;
+  }
+}
+
+// Helper pour alerter un enseignant précis par push
+async function triggerPushToTeacher(
+  teacherEmail: string,
+  payload: { title: string; body: string; url?: string }
+) {
+  if (!teacherEmail) return;
+  const cleanEmail = teacherEmail.trim().toLowerCase();
+  const subs = loadPushSubscriptions().filter(
+    (s) => s.userEmail && s.userEmail.trim().toLowerCase() === cleanEmail
+  );
+  if (subs.length > 0) {
+    await Promise.allSettled(subs.map((s) => sendPushNotification(s, payload)));
   }
 }
 
@@ -6013,6 +6132,188 @@ app.delete('/api/admin/notifications/:id', requireAdminAuth, (req, res) => {
 });
 
 // ============================================================================
+// 📲 GESTION DES NOTIFICATIONS WEB PUSH (SMARTPHONES & NAVIGATEURS)
+// ============================================================================
+
+// Public: Récupérer la clé publique VAPID
+app.get('/api/push/vapid-public-key', (_req, res) => {
+  res.json({
+    success: true,
+    publicKey: vapidKeys.publicKey,
+  });
+});
+
+// Public: Enregistrer un abonnement push depuis un smartphone ou un ordinateur
+app.post('/api/push/subscribe', (req, res) => {
+  try {
+    const { subscription, userEmail, userName, userAgent } = req.body;
+    if (!subscription || !subscription.endpoint || !subscription.keys) {
+      return res.status(400).json({ error: 'Données d’abonnement push invalides.' });
+    }
+
+    const subs = loadPushSubscriptions();
+    const existingIndex = subs.findIndex((s) => s.endpoint === subscription.endpoint);
+
+    const record: PushSubscriptionRecord = {
+      endpoint: subscription.endpoint,
+      keys: {
+        p256dh: subscription.keys.p256dh,
+        auth: subscription.keys.auth,
+      },
+      userEmail: userEmail ? String(userEmail).trim().toLowerCase() : undefined,
+      userName: userName ? String(userName).trim() : undefined,
+      userAgent: userAgent ? String(userAgent).slice(0, 150) : undefined,
+      subscribedAt: new Date().toISOString(),
+    };
+
+    if (existingIndex >= 0) {
+      subs[existingIndex] = { ...subs[existingIndex], ...record };
+    } else {
+      subs.unshift(record);
+    }
+
+    savePushSubscriptions(subs);
+    console.log(`[WebPush] Nouvel appareil abonné (${subs.length} au total). Email: ${record.userEmail || 'Visiteur'}`);
+
+    // Envoyer une notification de bienvenue immédiate pour confirmer le fonctionnement
+    sendPushNotification(record, {
+      title: '🎉 Notifications Praxis Pro activées !',
+      body: 'Vous recevrez désormais vos alertes de fin de correction directement sur cet écran.',
+      url: '/#historique',
+      tag: 'praxis-welcome-push',
+    }).catch(() => {});
+
+    res.json({
+      success: true,
+      message: 'Appareil enregistré avec succès pour les notifications push.',
+      totalSubscribers: subs.length,
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || 'Erreur enregistrement push.' });
+  }
+});
+
+// Public: Désabonnement push
+app.post('/api/push/unsubscribe', (req, res) => {
+  try {
+    const { endpoint } = req.body;
+    if (!endpoint) return res.status(400).json({ error: 'Endpoint requis.' });
+
+    let subs = loadPushSubscriptions();
+    subs = subs.filter((s) => s.endpoint !== endpoint);
+    savePushSubscriptions(subs);
+
+    res.json({ success: true, message: 'Désabonnement pris en compte.' });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Public: Envoyer un test push immédiat sur l'appareil connecté
+app.post('/api/push/test', async (req, res) => {
+  try {
+    const { subscription } = req.body;
+    if (!subscription || !subscription.endpoint || !subscription.keys) {
+      return res.status(400).json({ error: 'Abonnement manquant.' });
+    }
+
+    const testRecord: PushSubscriptionRecord = {
+      endpoint: subscription.endpoint,
+      keys: subscription.keys,
+      subscribedAt: new Date().toISOString(),
+    };
+
+    const sent = await sendPushNotification(testRecord, {
+      title: '⚡ Test Praxis IA Push',
+      body: 'La liaison push entre votre smartphone et le serveur Praxis fonctionne parfaitement !',
+      url: '/#aide',
+      tag: 'praxis-test-push',
+    });
+
+    if (sent) {
+      res.json({ success: true, message: 'Notification test envoyée avec succès.' });
+    } else {
+      res.status(500).json({ success: false, error: 'Impossible de délivrer la notification test.' });
+    }
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Admin: Obtenir les statistiques des appareils abonnés
+app.get('/api/admin/push/stats', requireAdminAuth, (_req, res) => {
+  try {
+    const subs = loadPushSubscriptions();
+    res.json({
+      success: true,
+      count: subs.length,
+      subscribers: subs.map((s) => ({
+        email: s.userEmail || 'Utilisateur invité',
+        name: s.userName || 'Enseignant',
+        userAgent: s.userAgent || 'Appareil mobile/desktop',
+        subscribedAt: s.subscribedAt,
+        endpointPreview: s.endpoint.slice(0, 40) + '...',
+      })),
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Admin: Diffuser une notification push à tous les appareils abonnés
+app.post('/api/admin/push/broadcast', requireAdminAuth, async (req, res) => {
+  try {
+    const { title, body, url, tag } = req.body;
+    if (!title || !body) {
+      return res.status(400).json({ error: 'Le titre et le message du push sont obligatoires.' });
+    }
+
+    const subs = loadPushSubscriptions();
+    if (subs.length === 0) {
+      return res.json({
+        success: true,
+        sentCount: 0,
+        failedCount: 0,
+        total: 0,
+        message: 'Aucun appareil abonné pour le moment.',
+      });
+    }
+
+    let sentCount = 0;
+    let failedCount = 0;
+
+    const results = await Promise.allSettled(
+      subs.map(async (sub) => {
+        const ok = await sendPushNotification(sub, {
+          title: String(title).trim(),
+          body: String(body).trim(),
+          url: url ? String(url).trim() : '/#historique',
+          tag: tag || `broadcast-${Date.now()}`,
+        });
+        if (ok) sentCount++;
+        else failedCount++;
+      })
+    );
+
+    // Alerte Telegram pour archiver la diffusion
+    const tgMsg = `📲 <b>Notification Push Envoyée aux Smartphones !</b>\n━━━━━━━━━━━━━━━━━━━━\n📌 <b>Titre :</b> ${escapeTelegramHtml(title)}\n📝 <b>Message :</b> ${escapeTelegramHtml(body)}\n🎯 <b>Délivrés :</b> ${sentCount} appareils (${failedCount} échecs)`;
+    sendTelegramNotification(tgMsg).catch(() => {});
+
+    console.log(`[WebPush] Broadcast push envoyé : ${sentCount} succès / ${failedCount} échecs sur ${subs.length} abonnés.`);
+
+    res.json({
+      success: true,
+      sentCount,
+      failedCount,
+      total: subs.length,
+      message: `Notification push transmise avec succès à ${sentCount} appareil(s).`,
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ============================================================================
 // 🎬 VIDÉOS TUTORIELS & PRISE EN MAIN (GESTION ADMIN & AFFICHAGE PROFESSEURS)
 // ============================================================================
 
@@ -8306,6 +8607,14 @@ app.get(['/manifest.webmanifest', '/manifest.json'], (req, res) => {
   res.setHeader('Content-Type', 'application/manifest+json; charset=utf-8');
   const manifestPath = path.join(process.cwd(), 'public', 'manifest.webmanifest');
   res.sendFile(manifestPath);
+});
+
+// Explicit Service Worker route with proper Service-Worker-Allowed header
+app.get(['/sw.js', '/service-worker.js'], (req, res) => {
+  res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+  res.setHeader('Service-Worker-Allowed', '/');
+  const swPath = path.join(process.cwd(), 'public', 'sw.js');
+  res.sendFile(swPath);
 });
 
 // Explicit route for Admin console: praxis-pro.pro/admin -> /#admin

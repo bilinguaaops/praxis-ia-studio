@@ -29,6 +29,7 @@ import { AuthView } from './components/AuthView';
 import { MobilePWAInstallModal } from './components/MobilePWAInstallModal';
 import { InstitutionView } from './components/InstitutionView';
 import { AffiliateDashboard } from './components/AffiliateDashboard';
+import { PushNotificationBanner } from './components/PushNotificationBanner';
 import { useSupabaseAuth } from './lib/useSupabaseAuth';
 import { supabase, isSupabaseConfigured } from './lib/supabase';
 
@@ -1164,6 +1165,13 @@ export default function App() {
             />
 
             <main className="flex-1 w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-5 sm:py-8">
+              {/* Push Notifications Opt-In Banner */}
+              <PushNotificationBanner
+                userEmail={currentLead?.email}
+                userName={currentLead?.name}
+                className="mb-6"
+              />
+
               {/* VIEW 0: TEACHER DASHBOARD (ACCUEIL) */}
               {activeView === 'dashboard' && (
                 <TeacherDashboardView
