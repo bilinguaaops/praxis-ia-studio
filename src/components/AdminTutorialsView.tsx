@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Video,
   Play,
@@ -18,6 +18,7 @@ import {
   Info,
   UploadCloud,
   Check,
+  FileVideo,
 } from 'lucide-react';
 import { TutorialVideoItem } from './VideoTutorialSection';
 
@@ -34,6 +35,12 @@ export const AdminTutorialsView: React.FC<AdminTutorialsViewProps> = ({
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+
+  // File upload state for local / direct video files
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadedFileName, setUploadedFileName] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Form fields
   const [title, setTitle] = useState('');
@@ -209,6 +216,60 @@ export const AdminTutorialsView: React.FC<AdminTutorialsViewProps> = ({
     }
   };
 
+  // Direct video file upload handler
+  const handleFileUpload = async (file: File) => {
+    if (!file) return;
+    setIsUploading(true);
+    setUploadProgress(5);
+    setUploadedFileName(file.name);
+
+    try {
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', '/api/admin/tutorials/upload-video', true);
+      xhr.setRequestHeader('x-admin-token', getEffectiveToken());
+      xhr.setRequestHeader('x-filename', encodeURIComponent(file.name));
+      xhr.setRequestHeader('Content-Type', file.type || 'video/mp4');
+
+      xhr.upload.onprogress = (evt) => {
+        if (evt.lengthComputable) {
+          const percent = Math.round((evt.loaded / evt.total) * 100);
+          setUploadProgress(percent);
+        }
+      };
+
+      xhr.onload = () => {
+        setIsUploading(false);
+        if (xhr.status >= 200 && xhr.status < 300) {
+          try {
+            const res = JSON.parse(xhr.responseText);
+            if (res.videoUrl) {
+              setVideoUrl(res.videoUrl);
+              if (!title.trim()) {
+                setTitle(`Tutoriel Praxis - ${file.name.replace(/\.[^/.]+$/, '')}`);
+              }
+            }
+            if (onNotify) onNotify('Vidéo téléversée avec succès sur le serveur Praxis !', 'success');
+            fetchTutorials();
+          } catch {
+            if (onNotify) onNotify('Vidéo téléversée avec succès !', 'success');
+          }
+        } else {
+          if (onNotify) onNotify('Erreur lors du téléversement du fichier vidéo.', 'error');
+        }
+      };
+
+      xhr.onerror = () => {
+        setIsUploading(false);
+        if (onNotify) onNotify('Échec réseau lors du téléversement.', 'error');
+      };
+
+      xhr.send(file);
+    } catch (err: any) {
+      setIsUploading(false);
+      if (onNotify) onNotify(err.message || 'Erreur lors de l’envoi.', 'error');
+    }
+  };
+
   // Preview helpers
   const getEmbedPreviewUrl = (url: string) => {
     if (!url) return '';
@@ -222,8 +283,10 @@ export const AdminTutorialsView: React.FC<AdminTutorialsViewProps> = ({
 
   const isDirectVideo = (url: string) => {
     return (
+      url.startsWith('/videos/') ||
       url.endsWith('.mp4') ||
       url.endsWith('.webm') ||
+      url.endsWith('.mov') ||
       url.includes('cloudinary.com') ||
       url.includes('.mp4?')
     );
@@ -358,20 +421,80 @@ export const AdminTutorialsView: React.FC<AdminTutorialsViewProps> = ({
               />
             </div>
 
+            {/* Direct File Upload Option */}
+            <div className="p-3.5 bg-blue-950/30 border border-blue-500/30 rounded-xl space-y-2.5">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-white flex items-center gap-1.5 text-xs">
+                  <UploadCloud className="w-4 h-4 text-blue-400" />
+                  Téléverser votre propre fichier (.mp4, .mov, .webm)
+                </span>
+                <span className="text-[10px] text-blue-300 font-mono">Direct serveur</span>
+              </div>
+              <p className="text-[11px] text-slate-400 leading-relaxed">
+                Sélectionnez la vidéo que vous avez filmée sur votre téléphone ou PC. Elle sera hébergée et diffusée directement sur Praxis sans redirection.
+              </p>
+
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="video/mp4,video/webm,video/quicktime,video/x-m4v"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) handleFileUpload(file);
+                }}
+                className="hidden"
+              />
+
+              <button
+                type="button"
+                disabled={isUploading}
+                onClick={() => fileInputRef.current?.click()}
+                className="w-full py-2.5 px-3 bg-blue-600/80 hover:bg-blue-600 disabled:opacity-50 text-white font-bold rounded-lg flex items-center justify-center gap-2 cursor-pointer transition text-xs shadow-md"
+              >
+                <FileVideo className="w-4 h-4" />
+                <span>{isUploading ? `Téléversement en cours (${uploadProgress}%)...` : 'Choisir mon fichier vidéo filmé'}</span>
+              </button>
+
+              {isUploading && (
+                <div className="space-y-1">
+                  <div className="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                    <div
+                      className="bg-blue-500 h-full transition-all duration-200"
+                      style={{ width: `${uploadProgress}%` }}
+                    />
+                  </div>
+                  <span className="text-[10px] text-slate-400 block text-right font-mono">{uploadProgress}%</span>
+                </div>
+              )}
+
+              {uploadedFileName && !isUploading && (
+                <div className="flex items-center gap-1.5 text-[11px] text-emerald-400 font-medium">
+                  <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                  <span className="truncate">Fichier prêt : {uploadedFileName}</span>
+                </div>
+              )}
+            </div>
+
+            <div className="relative flex py-1 items-center">
+              <div className="grow border-t border-slate-800"></div>
+              <span className="shrink mx-3 text-slate-500 text-[10px] uppercase font-bold tracking-wider">OU collez une URL</span>
+              <div className="grow border-t border-slate-800"></div>
+            </div>
+
             <div>
               <label className="block text-slate-300 font-semibold mb-1">
-                Lien de la vidéo (Cloudinary, YouTube, Loom, MP4) *
+                Lien de la vidéo (MP4 local, Cloudinary, YouTube, Loom) *
               </label>
               <input
-                type="url"
+                type="text"
                 required
                 value={videoUrl}
                 onChange={(e) => setVideoUrl(e.target.value)}
-                placeholder="https://res.cloudinary.com/... ou https://youtu.be/..."
+                placeholder="/videos/... ou https://res.cloudinary.com/... ou https://youtu.be/..."
                 className="w-full bg-[#0B0F17] border border-slate-700 rounded-xl px-3.5 py-2.5 text-white placeholder-slate-600 font-mono text-[11px] focus:outline-hidden focus:border-blue-500 transition-colors"
               />
               <p className="text-[11px] text-slate-500 mt-1">
-                Supporte les liens Cloudinary MP4, YouTube (watch, share, shorts) et Loom.
+                Supporte les fichiers MP4 locaux (/videos/...), Cloudinary, YouTube et Loom.
               </p>
             </div>
 

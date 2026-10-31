@@ -6397,6 +6397,50 @@ app.delete('/api/admin/tutorials/:id', requireAdminAuth, (req, res) => {
   }
 });
 
+// Admin: Téléverser directement un fichier vidéo MP4/WebM/MOV
+app.post('/api/admin/tutorials/upload-video', requireAdminAuth, (req, res) => {
+  try {
+    const publicVideosDir = path.join(process.cwd(), 'public', 'videos');
+    if (!fs.existsSync(publicVideosDir)) {
+      fs.mkdirSync(publicVideosDir, { recursive: true });
+    }
+
+    const headerName = (req.headers['x-filename'] as string) || '';
+    const rawFilename = headerName ? decodeURIComponent(headerName) : `tutoriel-praxis-${Date.now()}.mp4`;
+    const cleanFilename = rawFilename.replace(/[^a-zA-Z0-9_.-]/g, '_');
+    const targetPath = path.join(publicVideosDir, cleanFilename);
+    const writeStream = fs.createWriteStream(targetPath);
+
+    req.pipe(writeStream);
+
+    writeStream.on('finish', () => {
+      const videoUrl = `/videos/${cleanFilename}`;
+      let tutorials = loadTutorials();
+      const featured = tutorials.find((t) => t.isFeatured) || tutorials[0];
+      if (featured) {
+        featured.videoUrl = videoUrl;
+        featured.videoType = 'direct';
+        featured.updatedAt = new Date().toISOString();
+        saveTutorials(tutorials);
+      }
+      console.log(`[Tutorials Upload] Nouveau fichier vidéo enregistré : ${cleanFilename}`);
+      res.json({
+        success: true,
+        videoUrl,
+        filename: cleanFilename,
+        message: 'Fichier vidéo téléversé avec succès et configuré comme vidéo principale !',
+      });
+    });
+
+    writeStream.on('error', (err) => {
+      console.error('[Tutorials Upload Error]:', err);
+      res.status(500).json({ success: false, error: err.message });
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // ============================================================================
 // 📊 AUDIT & SUIVI DE CONSOMMATION DES CRÉDITS UTILISATEURS (TÂCHE 1 & 2)
 // ============================================================================
@@ -8652,6 +8696,13 @@ app.get([
   const queryString = req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : '';
   res.redirect(`/#${cleanPath}${queryString}`);
 });
+
+// Direct video assets static serving
+const publicVideosDir = path.join(process.cwd(), 'public', 'videos');
+if (!fs.existsSync(publicVideosDir)) {
+  fs.mkdirSync(publicVideosDir, { recursive: true });
+}
+app.use('/videos', express.static(publicVideosDir));
 
 // Vite middleware in dev or static serving in prod
 async function startServer() {

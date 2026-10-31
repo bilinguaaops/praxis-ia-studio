@@ -213,8 +213,10 @@ export const VideoTutorialSection: React.FC<VideoTutorialSectionProps> = ({
 
   const isDirectVideo =
     currentTutorial?.videoType === 'direct' ||
+    currentTutorial?.videoUrl?.startsWith('/videos/') ||
     currentTutorial?.videoUrl?.endsWith('.mp4') ||
     currentTutorial?.videoUrl?.endsWith('.webm') ||
+    currentTutorial?.videoUrl?.endsWith('.mov') ||
     (currentTutorial?.videoUrl?.includes('cloudinary.com') && !currentTutorial.videoUrl.includes('/embed'));
 
   return (
