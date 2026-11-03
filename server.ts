@@ -100,6 +100,9 @@ export interface LeadRecord {
 export interface PromoCodeConfig {
   code: string;
   discountPercent: number;
+  fixedPriceFcfa?: number;
+  fixedPriceEur?: number;
+  unlimitedUses?: boolean;
   firstMonthOnly: boolean;
   bonusCredits?: {
     starter?: number;
@@ -117,6 +120,66 @@ export interface PromoCodeConfig {
 }
 
 export const PROMO_CODES_REGISTRY: Record<string, PromoCodeConfig> = {
+  TEST100: {
+    code: 'TEST100',
+    discountPercent: 99,
+    fixedPriceFcfa: 100,
+    fixedPriceEur: 0.15,
+    unlimitedUses: true,
+    firstMonthOnly: false,
+    bonusCredits: {
+      starter: 100,
+      monthly: 300,
+      quarterly: 500,
+      school_year: 1000,
+      default: 200,
+    },
+    partnerId: 'admin_test',
+    partnerName: 'Test Administrateur (100 FCFA)',
+    partnerCommissionPercent: 0,
+    active: true,
+    description: 'Code Test Spécial : Tarif symbolique fixé à 100 FCFA (0,15 €) pour tester le paiement en direct.',
+  },
+  PRAXIS100: {
+    code: 'PRAXIS100',
+    discountPercent: 99,
+    fixedPriceFcfa: 100,
+    fixedPriceEur: 0.15,
+    unlimitedUses: true,
+    firstMonthOnly: false,
+    bonusCredits: {
+      starter: 100,
+      monthly: 300,
+      quarterly: 500,
+      school_year: 1000,
+      default: 200,
+    },
+    partnerId: 'admin_test',
+    partnerName: 'Test Administrateur (100 FCFA)',
+    partnerCommissionPercent: 0,
+    active: true,
+    description: 'Code Test Spécial : Tarif symbolique fixé à 100 FCFA (0,15 €) pour tester le paiement en direct.',
+  },
+  TESTPRO: {
+    code: 'TESTPRO',
+    discountPercent: 99,
+    fixedPriceFcfa: 100,
+    fixedPriceEur: 0.15,
+    unlimitedUses: true,
+    firstMonthOnly: false,
+    bonusCredits: {
+      starter: 100,
+      monthly: 300,
+      quarterly: 500,
+      school_year: 1000,
+      default: 200,
+    },
+    partnerId: 'admin_test',
+    partnerName: 'Test Administrateur (100 FCFA)',
+    partnerCommissionPercent: 0,
+    active: true,
+    description: 'Code Test Spécial : Tarif symbolique fixé à 100 FCFA (0,15 €) pour tester le paiement en direct.',
+  },
   PRAXIS10: {
     code: 'PRAXIS10',
     discountPercent: 0,
@@ -3904,7 +3967,7 @@ app.post('/api/promo/validate', (req, res) => {
       (cleanPhone && l.whatsapp && l.whatsapp === cleanPhone)
   );
 
-  if (teacher) {
+  if (teacher && !promo.unlimitedUses) {
     const usedCodes = (teacher.usedPromoCodes || []).map((c) => c.toUpperCase());
     if (usedCodes.includes(promo.code.toUpperCase())) {
       return res.status(400).json({
@@ -3918,19 +3981,38 @@ app.post('/api/promo/validate', (req, res) => {
   const originalPriceEur = targetPlan.priceEur;
 
   // Discount calculation
-  const discountFcfa = Math.round(originalPriceFcfa * (promo.discountPercent / 100));
-  const discountEur = Number((originalPriceEur * (promo.discountPercent / 100)).toFixed(2));
-  const finalPriceFcfa = Math.max(0, originalPriceFcfa - discountFcfa);
-  const finalPriceEur = Number(Math.max(0, originalPriceEur - discountEur).toFixed(2));
+  let discountFcfa = Math.round(originalPriceFcfa * (promo.discountPercent / 100));
+  let discountEur = Number((originalPriceEur * (promo.discountPercent / 100)).toFixed(2));
+  let finalPriceFcfa = Math.max(0, originalPriceFcfa - discountFcfa);
+  let finalPriceEur = Number(Math.max(0, originalPriceEur - discountEur).toFixed(2));
+
+  if (promo.fixedPriceFcfa !== undefined) {
+    finalPriceFcfa = promo.fixedPriceFcfa;
+    discountFcfa = Math.max(0, originalPriceFcfa - finalPriceFcfa);
+  }
+  if (promo.fixedPriceEur !== undefined) {
+    finalPriceEur = promo.fixedPriceEur;
+    discountEur = Number(Math.max(0, originalPriceEur - finalPriceEur).toFixed(2));
+  }
 
   const bonusCredits = getPromoBonusCredits(promo, targetPlan.id);
-
   const bonusNotice = bonusCredits > 0 ? ` + 🎁 ${bonusCredits} crédits bonus offerts` : '';
+
+  let message = '';
+  if (promo.fixedPriceFcfa !== undefined) {
+    message = `✓ Code test ${promo.code} activé : Tarif test réduit à ${finalPriceFcfa} FCFA (${finalPriceEur} €)${bonusNotice} !`;
+  } else if (promo.discountPercent > 0) {
+    message = `✓ Code ${promo.code} appliqué (-${promo.discountPercent}%${bonusNotice})`;
+  } else {
+    message = `✓ Code partenaire ${promo.code} activé : 🎁 +${bonusCredits} copies supplémentaires offertes !`;
+  }
 
   return res.json({
     valid: true,
     code: promo.code,
     discountPercent: promo.discountPercent,
+    fixedPriceFcfa: promo.fixedPriceFcfa,
+    fixedPriceEur: promo.fixedPriceEur,
     firstMonthOnly: promo.firstMonthOnly,
     bonusCredits,
     originalPriceFcfa,
@@ -3940,9 +4022,7 @@ app.post('/api/promo/validate', (req, res) => {
     finalPriceFcfa,
     finalPriceEur,
     partnerName: promo.partnerName,
-    message: promo.discountPercent > 0
-      ? `✓ Code ${promo.code} appliqué (-${promo.discountPercent}%${bonusNotice})`
-      : `✓ Code partenaire ${promo.code} activé : 🎁 +${bonusCredits} copies supplémentaires offertes !`,
+    message,
   });
 });
 
@@ -4035,12 +4115,14 @@ app.post('/api/paywall/checkout', async (req, res) => {
     }
 
     // Check if user already used this promo code
-    const usedCodes = (teacher.usedPromoCodes || []).map((c) => c.toUpperCase());
-    if (usedCodes.includes(promo.code.toUpperCase())) {
-      return res.status(400).json({
-        error: 'Ce code promo a déjà été utilisé sur votre compte.',
-        codeAlreadyUsed: true,
-      });
+    if (!promo.unlimitedUses) {
+      const usedCodes = (teacher.usedPromoCodes || []).map((c) => c.toUpperCase());
+      if (usedCodes.includes(promo.code.toUpperCase())) {
+        return res.status(400).json({
+          error: 'Ce code promo a déjà été utilisé sur votre compte.',
+          codeAlreadyUsed: true,
+        });
+      }
     }
 
     if (promo.allowedPlans && !promo.allowedPlans.includes(selectedPlan.id)) {
@@ -4063,14 +4145,23 @@ app.post('/api/paywall/checkout', async (req, res) => {
   let discountEur = 0;
 
   if (applyDiscount && appliedPromo) {
-    discountFcfa = Math.round(originalPriceFcfa * (appliedPromo.discountPercent / 100));
-    discountEur = Number((originalPriceEur * (appliedPromo.discountPercent / 100)).toFixed(2));
-    finalPriceFcfa = Math.max(0, originalPriceFcfa - discountFcfa);
-    finalPriceEur = Number(Math.max(0, originalPriceEur - discountEur).toFixed(2));
+    if (appliedPromo.fixedPriceFcfa !== undefined) {
+      finalPriceFcfa = appliedPromo.fixedPriceFcfa;
+      finalPriceEur = appliedPromo.fixedPriceEur ?? 0.15;
+      discountFcfa = Math.max(0, originalPriceFcfa - finalPriceFcfa);
+      discountEur = Number(Math.max(0, originalPriceEur - finalPriceEur).toFixed(2));
+    } else {
+      discountFcfa = Math.round(originalPriceFcfa * (appliedPromo.discountPercent / 100));
+      discountEur = Number((originalPriceEur * (appliedPromo.discountPercent / 100)).toFixed(2));
+      finalPriceFcfa = Math.max(0, originalPriceFcfa - discountFcfa);
+      finalPriceEur = Number(Math.max(0, originalPriceEur - discountEur).toFixed(2));
+    }
 
-    // Register promo code as used for this account
-    teacher.usedPromoCodes = Array.from(new Set([...(teacher.usedPromoCodes || []), appliedPromo.code]));
-    teacher.firstPurchaseDiscountUsed = true;
+    // Register promo code as used for this account (unless unlimitedUses)
+    if (!appliedPromo.unlimitedUses) {
+      teacher.usedPromoCodes = Array.from(new Set([...(teacher.usedPromoCodes || []), appliedPromo.code]));
+      teacher.firstPurchaseDiscountUsed = true;
+    }
     if (appliedPromo.partnerName) {
       teacher.referredByPartner = appliedPromo.partnerName;
     }
@@ -4735,10 +4826,15 @@ app.post('/api/paystack/initialize', async (req, res) => {
     let finalPriceEur = originalPriceEur;
 
     if (applyDiscount && appliedPromo) {
-      const discountFcfa = Math.round(originalPriceFcfa * (appliedPromo.discountPercent / 100));
-      const discountEur = Number((originalPriceEur * (appliedPromo.discountPercent / 100)).toFixed(2));
-      finalPriceFcfa = Math.max(0, originalPriceFcfa - discountFcfa);
-      finalPriceEur = Number(Math.max(0, originalPriceEur - discountEur).toFixed(2));
+      if (appliedPromo.fixedPriceFcfa !== undefined) {
+        finalPriceFcfa = appliedPromo.fixedPriceFcfa;
+        finalPriceEur = appliedPromo.fixedPriceEur ?? 0.15;
+      } else {
+        const discountFcfa = Math.round(originalPriceFcfa * (appliedPromo.discountPercent / 100));
+        const discountEur = Number((originalPriceEur * (appliedPromo.discountPercent / 100)).toFixed(2));
+        finalPriceFcfa = Math.max(0, originalPriceFcfa - discountFcfa);
+        finalPriceEur = Number(Math.max(0, originalPriceEur - discountEur).toFixed(2));
+      }
     }
 
     // For Paystack Côte d'Ivoire / West Africa, transactions are processed in XOF (FCFA)

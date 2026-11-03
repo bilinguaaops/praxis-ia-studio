@@ -469,6 +469,8 @@ export const PricingPage: React.FC<PricingPageProps> = ({
   const [appliedPromo, setAppliedPromo] = useState<{
     code: string;
     discountPercent: number;
+    fixedPriceFcfa?: number;
+    fixedPriceEur?: number;
     bonusCredits?: number;
     message?: string;
   } | null>(null);
@@ -566,6 +568,8 @@ export const PricingPage: React.FC<PricingPageProps> = ({
         setAppliedPromo({
           code: data.code,
           discountPercent: data.discountPercent,
+          fixedPriceFcfa: data.fixedPriceFcfa,
+          fixedPriceEur: data.fixedPriceEur,
           bonusCredits: data.bonusCredits,
           message: data.message,
         });
@@ -615,12 +619,21 @@ export const PricingPage: React.FC<PricingPageProps> = ({
   const basePriceEur = currentPlanMeta.priceEur;
 
   const isSubscription = selectedPlanId === 'monthly' || selectedPlanId === 'quarterly' || selectedPlanId === 'school_year';
+  const hasFixedPrice = Boolean(appliedPromo && appliedPromo.fixedPriceFcfa !== undefined);
   const discountPercent = appliedPromo && isSubscription ? appliedPromo.discountPercent : 0;
-  const discountFcfa = Math.round(basePriceFcfa * (discountPercent / 100));
-  const discountEur = Number((basePriceEur * (discountPercent / 100)).toFixed(2));
+  const discountFcfa = hasFixedPrice
+    ? Math.max(0, basePriceFcfa - appliedPromo!.fixedPriceFcfa!)
+    : Math.round(basePriceFcfa * (discountPercent / 100));
+  const discountEur = hasFixedPrice
+    ? Number(Math.max(0, basePriceEur - (appliedPromo!.fixedPriceEur || 0.15)).toFixed(2))
+    : Number((basePriceEur * (discountPercent / 100)).toFixed(2));
 
-  const finalPriceFcfa = Math.max(0, basePriceFcfa - discountFcfa);
-  const finalPriceEur = Number(Math.max(0, basePriceEur - discountEur).toFixed(2));
+  const finalPriceFcfa = hasFixedPrice
+    ? appliedPromo!.fixedPriceFcfa!
+    : Math.max(0, basePriceFcfa - discountFcfa);
+  const finalPriceEur = hasFixedPrice
+    ? (appliedPromo!.fixedPriceEur || 0.15)
+    : Number(Math.max(0, basePriceEur - discountEur).toFixed(2));
 
   const handleStartPaystackPayment = async (e: React.FormEvent) => {
     e.preventDefault();

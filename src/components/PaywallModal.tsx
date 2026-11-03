@@ -219,9 +219,12 @@ export const PaywallModal: React.FC<PaywallModalProps> = ({
   const [appliedPromo, setAppliedPromo] = useState<{
     code: string;
     discountPercent: number;
+    fixedPriceFcfa?: number;
+    fixedPriceEur?: number;
     bonusCredits?: number;
     partnerName?: string;
     partnerId?: string;
+    message?: string;
   } | null>(null);
   const [isValidatingPromo, setIsValidatingPromo] = useState(false);
   const [promoError, setPromoError] = useState('');
@@ -259,18 +262,31 @@ export const PaywallModal: React.FC<PaywallModalProps> = ({
   const selectedPlan = PLANS.find((p) => p.id === selectedPlanId) || PLANS[1];
   const isXof = currency === 'XOF';
 
-  // Strict discount logic: only applied if a valid promo code is verified
+  // Strict discount logic: applied if a valid promo code is verified
   const isSubscription = selectedPlan.category === 'subscription';
-  const hasPromo = Boolean(appliedPromo && isSubscription);
+  const hasFixedPrice = Boolean(appliedPromo && appliedPromo.fixedPriceFcfa !== undefined);
+  const hasPromo = Boolean(appliedPromo && (isSubscription || hasFixedPrice));
 
   const basePriceFcfa = selectedPlan.priceFcfa;
   const basePriceEur = selectedPlan.priceEur;
 
-  const discountAmountFcfa = hasPromo ? Math.round(basePriceFcfa * (appliedPromo!.discountPercent / 100)) : 0;
-  const discountAmountEur = hasPromo ? Number((basePriceEur * (appliedPromo!.discountPercent / 100)).toFixed(2)) : 0;
+  const discountAmountFcfa = hasFixedPrice
+    ? Math.max(0, basePriceFcfa - appliedPromo!.fixedPriceFcfa!)
+    : hasPromo
+    ? Math.round(basePriceFcfa * (appliedPromo!.discountPercent / 100))
+    : 0;
+  const discountAmountEur = hasFixedPrice
+    ? Number(Math.max(0, basePriceEur - (appliedPromo!.fixedPriceEur ?? 0.15)).toFixed(2))
+    : hasPromo
+    ? Number((basePriceEur * (appliedPromo!.discountPercent / 100)).toFixed(2))
+    : 0;
 
-  const finalPriceFcfa = Math.max(0, basePriceFcfa - discountAmountFcfa);
-  const finalPriceEur = Number(Math.max(0, basePriceEur - discountAmountEur).toFixed(2));
+  const finalPriceFcfa = hasFixedPrice
+    ? appliedPromo!.fixedPriceFcfa!
+    : Math.max(0, basePriceFcfa - discountAmountFcfa);
+  const finalPriceEur = hasFixedPrice
+    ? (appliedPromo!.fixedPriceEur ?? 0.15)
+    : Number(Math.max(0, basePriceEur - discountAmountEur).toFixed(2));
 
   const priceDisplay = isXof
     ? `${finalPriceFcfa.toLocaleString('fr-FR')} FCFA`
@@ -326,9 +342,12 @@ export const PaywallModal: React.FC<PaywallModalProps> = ({
       setAppliedPromo({
         code: data.code,
         discountPercent: data.discountPercent,
+        fixedPriceFcfa: data.fixedPriceFcfa,
+        fixedPriceEur: data.fixedPriceEur,
         bonusCredits: data.bonusCredits,
         partnerName: data.partnerName,
         partnerId: data.partnerId,
+        message: data.message,
       });
       setPromoError('');
     } catch {
@@ -1381,12 +1400,16 @@ export const PaywallModal: React.FC<PaywallModalProps> = ({
 
                 {appliedPromo && (
                   <p className="text-xs font-bold text-emerald-700">
-                    {appliedPromo.discountPercent > 0 ? (
+                    {appliedPromo.message ? (
+                      appliedPromo.message
+                    ) : appliedPromo.fixedPriceFcfa !== undefined ? (
+                      <>✓ Code test {appliedPromo.code} appliqué : Prix réduit à {finalPriceFcfa} FCFA ({finalPriceEur} €)</>
+                    ) : appliedPromo.discountPercent > 0 ? (
                       <>✓ Code {appliedPromo.code} appliqué (-{appliedPromo.discountPercent}% sur le premier mois)</>
                     ) : (
                       <>✓ Code affilié {appliedPromo.code} activé</>
                     )}
-                    {appliedPromo.bonusCredits ? (
+                    {!appliedPromo.message && appliedPromo.bonusCredits ? (
                       <span className="text-blue-700"> : 🎁 +{appliedPromo.bonusCredits} copies supplémentaires offertes !</span>
                     ) : null}
                   </p>
@@ -1398,9 +1421,9 @@ export const PaywallModal: React.FC<PaywallModalProps> = ({
                     <span>{selectedPlan.name}</span>
                     <span className="font-bold">{isXof ? `${basePriceFcfa.toLocaleString('fr-FR')} FCFA` : `${basePriceEur.toFixed(2)} €`}</span>
                   </div>
-                  {hasPromo && (appliedPromo?.discountPercent ?? 0) > 0 && (
+                  {hasPromo && (discountAmountFcfa > 0 || discountAmountEur > 0) && (
                     <div className="flex justify-between text-emerald-700 font-semibold">
-                      <span>Réduction ({appliedPromo?.discountPercent}%)</span>
+                      <span>{hasFixedPrice ? `Tarif Test Spécial (${appliedPromo?.code})` : `Réduction (${appliedPromo?.discountPercent}%)`}</span>
                       <span>-{isXof ? `${discountAmountFcfa.toLocaleString('fr-FR')} FCFA` : `${discountAmountEur.toFixed(2)} €`}</span>
                     </div>
                   )}
