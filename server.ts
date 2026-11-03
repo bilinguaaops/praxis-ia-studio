@@ -4721,6 +4721,73 @@ function fulfillPaidOrder(params: FulfillPaymentParams) {
 
   saveLeads(leads);
 
+  // Synchronisation automatique et immédiate avec Supabase (credit_balances et subscriptions)
+  (async () => {
+    try {
+      const supabase = getSupabaseServerClient();
+      if (!supabase) return;
+
+      const { data: prof } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('email', teacher.email)
+        .maybeSingle();
+
+      if (prof?.id) {
+        const nowIso = new Date().toISOString();
+        const expiresIso = teacher.renewalDate
+          ? new Date(teacher.renewalDate).toISOString()
+          : new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString();
+
+        // 1. Mettre à jour ou insérer l'abonnement
+        const { data: existingSub } = await supabase
+          .from('subscriptions')
+          .select('id')
+          .eq('teacher_id', prof.id)
+          .maybeSingle();
+
+        if (existingSub) {
+          await supabase
+            .from('subscriptions')
+            .update({
+              plan_id: teacher.plan || 'monthly',
+              status: 'active',
+              started_at: nowIso,
+              expires_at: expiresIso,
+              auto_renew: true,
+              updated_at: nowIso,
+            })
+            .eq('id', existingSub.id);
+        } else {
+          await supabase.from('subscriptions').insert({
+            teacher_id: prof.id,
+            plan_id: teacher.plan || 'monthly',
+            status: 'active',
+            started_at: nowIso,
+            expires_at: expiresIso,
+            auto_renew: true,
+          });
+        }
+
+        // 2. Mettre à jour le solde dans credit_balances
+        await supabase
+          .from('credit_balances')
+          .update({
+            subscription_credits: teacher.subscriptionCredits || 0,
+            purchased_credits: teacher.extraCredits || 0,
+            last_updated_at: nowIso,
+          })
+          .eq('teacher_id', prof.id);
+
+        console.log(
+          `[Paystack Sync Supabase] Solde et abonnement mis à jour dans Supabase pour ${teacher.email} (${prof.id}) !`
+        );
+      }
+    } catch (err: any) {
+      console.warn('[Paystack Sync Supabase Exception]:', err);
+    }
+  })();
+
   // Send real-time Telegram alert to admin
   const telegramMessage = `⚡ *Nouveau Paiement Paystack Confirmé !*
 ━━━━━━━━━━━━━━━━━━━━

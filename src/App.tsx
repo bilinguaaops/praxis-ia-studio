@@ -154,27 +154,90 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  // Effective authenticated lead : Supabase PostgreSQL est la SOURCE DE VÉRITÉ UNIQUE.
-  // Permet les mises à jour optimistes immédiates lors d'une correction pour éviter tout effet de blocage visuel.
+  // Effective authenticated lead : Combine Supabase et le serveur Praxis pour garantir
+  // que les forfaits payés (Paystack / Wave) et les crédits achetés soient TOUJOURS disponibles sans perte.
   const currentLead: LeadData | null = useMemo(() => {
     if (supabaseLead) {
       if (localLead && (!localLead.email || localLead.email.toLowerCase() === supabaseLead.email.toLowerCase())) {
         const effectiveCopies = Math.max(supabaseLead.copiesCorrected || 0, localLead.copiesCorrected || 0);
         const effectiveCredits = typeof localLead.subscriptionCredits === 'number'
-          ? Math.min(supabaseLead.subscriptionCredits ?? 15, localLead.subscriptionCredits)
+          ? Math.max(supabaseLead.subscriptionCredits ?? 0, localLead.subscriptionCredits ?? 0)
           : supabaseLead.subscriptionCredits;
+        const effectiveExtra = Math.max(localLead.extraCredits ?? 0, supabaseLead.extraCredits ?? 0);
+        const effectivePlan = (localLead.plan && localLead.plan !== 'free' && localLead.plan !== 'trial')
+          ? localLead.plan
+          : supabaseLead.plan;
         return {
           ...supabaseLead,
+          plan: effectivePlan,
           copiesCorrected: effectiveCopies,
           subscriptionCredits: effectiveCredits,
-          extraCredits: localLead.extraCredits ?? supabaseLead.extraCredits,
-          quota: Math.max(supabaseLead.quota || 15, effectiveCopies + (effectiveCredits || 0) + (supabaseLead.extraCredits || 0)),
+          extraCredits: effectiveExtra,
+          quota: Math.max(supabaseLead.quota || 15, effectiveCopies + (effectiveCredits || 0) + effectiveExtra),
         };
       }
       return supabaseLead;
     }
     return localLead;
   }, [supabaseLead, localLead]);
+
+  // Synchronisation automatique en arrière-plan avec le serveur (/api/teacher/me)
+  // Permet d'actualiser immédiatement les crédits dès qu'un paiement Paystack ou Wave est confirmé
+  useEffect(() => {
+    const targetEmail = localLead?.email || supabaseLead?.email;
+    if (!targetEmail || targetEmail === 'professeur@praxis.edu') return;
+
+    const syncAccountState = async () => {
+      try {
+        const res = await fetch(`/api/teacher/me?email=${encodeURIComponent(targetEmail.trim().toLowerCase())}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data && data.email) {
+          setLocalLead((prev) => {
+            const serverQuota = typeof data.quota === 'number' ? data.quota : 15;
+            const serverSub = typeof data.subscriptionCredits === 'number' ? data.subscriptionCredits : 0;
+            const serverExtra = typeof data.extraCredits === 'number' ? data.extraCredits : 0;
+            const serverPlan = data.plan || 'trial';
+
+            // Si le serveur a un forfait actif ou un quota plus élevé, on met à jour
+            const shouldUpdate =
+              serverPlan !== prev?.plan ||
+              serverQuota !== prev?.quota ||
+              serverSub !== prev?.subscriptionCredits;
+
+            if (shouldUpdate) {
+              const updated: LeadData = {
+                ...(prev || {}),
+                name: data.name || prev?.name || 'Enseignant',
+                email: data.email,
+                whatsapp: data.whatsapp || prev?.whatsapp || '',
+                school: data.school || prev?.school || '',
+                plan: serverPlan,
+                quota: serverQuota,
+                subscriptionCredits: serverSub,
+                extraCredits: serverExtra,
+                copiesCorrected: data.copiesCorrected || prev?.copiesCorrected || 0,
+                status: data.status || 'active',
+              };
+              localStorage.setItem('praxis_lead', JSON.stringify(updated));
+              localStorage.setItem('cpro_lead', JSON.stringify(updated));
+              return updated;
+            }
+            return prev;
+          });
+        }
+      } catch (e) {
+        console.warn('[Sync Account State] Erreur non-bloquante:', e);
+      }
+    };
+
+    syncAccountState();
+
+    // Réactualiser au retour sur l'onglet
+    const handleWindowFocus = () => syncAccountState();
+    window.addEventListener('focus', handleWindowFocus);
+    return () => window.removeEventListener('focus', handleWindowFocus);
+  }, [localLead?.email, supabaseLead?.email]);
 
   // Paystack Return / Callback Handler
   const [paystackNotice, setPaystackNotice] = useState<string | null>(null);

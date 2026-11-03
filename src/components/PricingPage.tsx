@@ -669,6 +669,19 @@ export const PricingPage: React.FC<PricingPageProps> = ({
 
       if (data.authorizationUrl) {
         try {
+          localStorage.setItem(
+            'praxis_pending_paystack',
+            JSON.stringify({
+              email: teacherEmail.trim().toLowerCase(),
+              name: teacherName.trim() || 'Enseignant',
+              whatsapp: teacherPhone.trim(),
+              plan: selectedPlanId,
+              promoCode: appliedPromo?.code || undefined,
+            })
+          );
+        } catch {}
+
+        try {
           if (window.top && window.top !== window) {
             const win = window.open(data.authorizationUrl, '_blank');
             if (!win) {

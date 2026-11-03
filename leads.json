@@ -1,5 +1,49 @@
 [
   {
+    "id": "lead_bilingua_agency",
+    "name": "Direction Bilingua / Praxis",
+    "email": "bilingua.agency@gmail.com",
+    "whatsapp": "+2250767265802",
+    "school": "Direction Praxis",
+    "city": "Abidjan",
+    "country": "CI",
+    "plan": "monthly",
+    "status": "active",
+    "role": "teacher",
+    "createdAt": "2026-11-03T13:24:02.687Z",
+    "lastActiveAt": "2026-11-03T13:24:02.688Z",
+    "copiesCorrected": 0,
+    "subscriptionCredits": 315,
+    "extraCredits": 300,
+    "quota": 615,
+    "totalSpent": 0.15,
+    "usedPromoCodes": [
+      "TEST100"
+    ],
+    "firstPurchaseDiscountUsed": true,
+    "renewalDate": "2026-12-03",
+    "transactions": [
+      {
+        "id": "px_mw0plz5b_57ka_bilingua",
+        "teacherId": "lead_bilingua_agency",
+        "teacherName": "Direction Bilingua",
+        "teacherEmail": "bilingua.agency@gmail.com",
+        "date": "2026-11-03",
+        "amount": 0.15,
+        "currency": "XOF",
+        "plan": "monthly",
+        "status": "succeeded",
+        "paymentMethod": "Paystack (MOBILE_MONEY)",
+        "description": "Abonnement Mensuel (Praxis Pro) · 100 FCFA · Réf: px_mw0plz5b_57ka",
+        "originalAmount": 5000,
+        "discountAmount": 4950,
+        "promoCode": "TEST100",
+        "discountPercent": 99
+      }
+    ],
+    "notes": "Abonnement Mensuel Pro activé avec succès."
+  },
+  {
     "id": "d9d4b123-3148-4948-baf5-70a170e528a4",
     "name": "Mamadou Saliou Barry",
     "email": "bmamadousaliou398@gmail.com",
@@ -7322,16 +7366,43 @@
     "school": "Établissement non précisé",
     "city": "",
     "country": "SN",
-    "plan": "free",
+    "plan": "monthly",
     "status": "active",
     "role": "teacher",
     "createdAt": "2026-10-15T10:04:57.403811+00:00",
-    "lastActiveAt": "2026-10-15T10:04:57.403811+00:00",
+    "lastActiveAt": "2026-11-03T13:19:49.696Z",
     "copiesCorrected": 0,
-    "subscriptionCredits": 15,
-    "extraCredits": 0,
-    "quota": 15,
-    "totalSpent": 0
+    "subscriptionCredits": 315,
+    "extraCredits": 300,
+    "quota": 615,
+    "totalSpent": 0.15,
+    "usedPromoCodes": [
+      "TEST100"
+    ],
+    "firstPurchaseDiscountUsed": true,
+    "referredByPartner": "Test Administrateur (100 FCFA)",
+    "renewalDate": "2026-12-03",
+    "transactions": [
+      {
+        "id": "px_mw0plz5b_57ka",
+        "teacherId": "c42ee3c8-19f0-48fa-855e-7f0ea9422b76",
+        "teacherName": "Agoussou kevine",
+        "teacherEmail": "pawsensei20@gmail.com",
+        "date": "2026-11-03",
+        "amount": 0.15,
+        "currency": "XOF",
+        "plan": "monthly",
+        "status": "succeeded",
+        "paymentMethod": "Paystack (MOBILE_MONEY)",
+        "description": "Abonnement Mensuel (Praxis Pro) · 100 FCFA (mobile_money) · Réf: px_mw0plz5b_57ka",
+        "originalAmount": 5000,
+        "discountAmount": 4950,
+        "promoCode": "TEST100",
+        "discountPercent": 99,
+        "partnerAttribution": "Test Administrateur (100 FCFA)"
+      }
+    ],
+    "notes": "[Paystack Paystack (MOBILE_MONEY) 03/11/2026 13:19:49] : 100 FCFA - Abonnement Mensuel (Praxis Pro)"
   },
   {
     "id": "2c16cefc-e088-4d60-ae68-5e71d5a2bd86",
